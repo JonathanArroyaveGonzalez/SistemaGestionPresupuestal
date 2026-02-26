@@ -5,53 +5,41 @@ namespace SAPFIAI.Domain.Entities;
 /// </summary>
 public class AuditLog : BaseEntity
 {
-    /// <summary>
-    /// Identificador del usuario que realizó la acción
-    /// </summary>
-    public string UserId { get; set; } = string.Empty;
+    public string UserId { get; private set; }
+    public string Action { get; private set; }
+    public string? IpAddress { get; private set; }
+    public string? UserAgent { get; private set; }
+    public DateTime Timestamp { get; private set; }
+    public string? Details { get; private set; }
+    public string Status { get; private set; }
+    public string? ErrorMessage { get; private set; }
+    public string? ResourceId { get; private set; }
+    public string? ResourceType { get; private set; }
 
-    /// <summary>
-    /// Tipo de acción realizada (LOGIN, CREATE_TODO, ENABLE_2FA, etc.)
-    /// </summary>
-    public string Action { get; set; } = string.Empty;
+    private AuditLog(string userId, string action, string? ipAddress, string? userAgent, string? details, string status, string? errorMessage, string? resourceId, string? resourceType)
+    {
+        UserId = userId;
+        Action = action;
+        IpAddress = ipAddress;
+        UserAgent = userAgent;
+        Timestamp = DateTime.UtcNow;
+        Details = details;
+        Status = status;
+        ErrorMessage = errorMessage;
+        ResourceId = resourceId;
+        ResourceType = resourceType;
+    }
 
-    /// <summary>
-    /// Dirección IP de origen
-    /// </summary>
-    public string? IpAddress { get; set; }
+    // Required by EF Core
+    private AuditLog() 
+    {
+        UserId = string.Empty;
+        Action = string.Empty;
+        Status = string.Empty;
+    }
 
-    /// <summary>
-    /// User Agent del cliente
-    /// </summary>
-    public string? UserAgent { get; set; }
-
-    /// <summary>
-    /// Marca de tiempo de la acción
-    /// </summary>
-    public DateTime Timestamp { get; set; }
-
-    /// <summary>
-    /// Detalles adicionales en formato JSON
-    /// </summary>
-    public string? Details { get; set; }
-
-    /// <summary>
-    /// Estado de la acción (SUCCESS, FAILED, PENDING)
-    /// </summary>
-    public string Status { get; set; } = "SUCCESS";
-
-    /// <summary>
-    /// Mensaje de error (si aplica)
-    /// </summary>
-    public string? ErrorMessage { get; set; }
-
-    /// <summary>
-    /// Recurso afectado (opcional: ID de entidad modificada)
-    /// </summary>
-    public string? ResourceId { get; set; }
-
-    /// <summary>
-    /// Tipo de recurso afectado (TodoList, TodoItem, etc.)
-    /// </summary>
-    public string? ResourceType { get; set; }
+    public static AuditLog Create(string userId, string action, string? ipAddress, string? userAgent, string? details, string status = "SUCCESS", string? errorMessage = null, string? resourceId = null, string? resourceType = null)
+    {
+        return new AuditLog(userId, action, ipAddress, userAgent, details, status, errorMessage, resourceId, resourceType);
+    }
 }
