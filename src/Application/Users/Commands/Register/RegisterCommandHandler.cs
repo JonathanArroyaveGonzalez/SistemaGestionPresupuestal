@@ -1,4 +1,4 @@
-using SAPFIAI.Application.Common.Interfaces;
+ï»¿using SAPFIAI.Application.Common.Interfaces;
 using MediatR;
 
 namespace SAPFIAI.Application.Users.Commands.Register;
@@ -6,52 +6,51 @@ namespace SAPFIAI.Application.Users.Commands.Register;
 public class RegisterCommandHandler : IRequestHandler<RegisterCommand, RegisterResponse>
 {
     private readonly IIdentityService _identityService;
-    private readonly IAuditLogService _auditLogService;
     private readonly IEmailService _emailService;
+    private readonly IAuditLogService _auditLogService;
 
     public RegisterCommandHandler(
         IIdentityService identityService,
-        IAuditLogService auditLogService,
-        IEmailService emailService)
+        IEmailService emailService,
+        IAuditLogService auditLogService)
     {
         _identityService = identityService;
-        _auditLogService = auditLogService;
         _emailService = emailService;
+        _auditLogService = auditLogService;
     }
 
     public async Task<RegisterResponse> Handle(RegisterCommand request, CancellationToken cancellationToken)
     {
-        // Crear usuario
         var (result, userId) = await _identityService.CreateUserAsync(request.Email, request.Password);
 
-        if (!result.Succeeded)
+        if (!result.IsSuccess)
         {
             await _auditLogService.LogActionAsync(
                 userId: request.Email,
                 action: "REGISTER_FAILED",
                 ipAddress: request.IpAddress ?? "UNKNOWN",
                 userAgent: request.UserAgent,
-                details: string.Join(", ", result.Errors),
+                details: result.Error.Description,
                 status: "FAILED");
 
             return new RegisterResponse
             {
                 Success = false,
                 Message = "Error al crear el usuario",
-                Errors = result.Errors
+                Errors = new[] { result.Error.Description }
             };
         }
 
-        // Registrar auditoría
+        // Registrar auditorÃ­a
         await _auditLogService.LogActionAsync(
             userId: userId,
             action: "REGISTER_SUCCESS",
             ipAddress: request.IpAddress ?? "UNKNOWN",
             userAgent: request.UserAgent,
-            details: $"Usuario registrado: {request.Email}",
+            details: "Usuario registrado: $($request.Email)",
             status: "SUCCESS");
 
-        // Enviar email de confirmación (no bloquea el registro si falla)
+        // Enviar email de confirmaciÃ³n (no bloquea el registro si falla)
         try
         {
             await _emailService.SendRegistrationConfirmationAsync(

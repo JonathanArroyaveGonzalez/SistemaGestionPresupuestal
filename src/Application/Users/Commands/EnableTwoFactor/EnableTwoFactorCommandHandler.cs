@@ -1,74 +1,60 @@
-using SAPFIAI.Application.Common.Interfaces;
+ï»¿using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
 using MediatR;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SAPFIAI.Application.Users.Commands.EnableTwoFactor;
 
 public class EnableTwoFactorCommandHandler : IRequestHandler<EnableTwoFactorCommand, Result>
 {
-    private readonly IAuthenticationOperations _authOperations;
+    private readonly IIdentityService _identityService;
+    private readonly IUser _currentUser;
     private readonly IAuditLogService _auditLogService;
-    private readonly ITwoFactorService _twoFactorService;
 
     public EnableTwoFactorCommandHandler(
-        IAuthenticationOperations authOperations,
-        IAuditLogService auditLogService,
-        ITwoFactorService twoFactorService)
+        IIdentityService identityService,
+        IUser currentUser,
+        IAuditLogService auditLogService)
     {
-        _authOperations = authOperations;
+        _identityService = identityService;
+        _currentUser = currentUser;
         _auditLogService = auditLogService;
-        _twoFactorService = twoFactorService;
     }
 
     public async Task<Result> Handle(EnableTwoFactorCommand request, CancellationToken cancellationToken)
     {
+        var userId = _currentUser.Id;
+        
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Result.Failure(Error.Failure("User.Unauthorized", "Usuario no autenticado"));
+        }
+
         try
         {
-            var (isValid, userId, _) = await _authOperations.VerifyCredentialsAsync(request.Email, request.Password);
+            await _auditLogService.LogActionAsync(
+                userId: userId,
+                action: "ENABLE_2FA",
+                ipAddress: "UNKNOWN",
+                userAgent: "UNKNOWN",
+                details: "2FA habilitado exitosamente",
+                status: "SUCCESS");
 
-            if (!isValid || userId == null || !string.Equals(userId, request.UserId, StringComparison.Ordinal))
-            {
-                return Result.Failure(new[] { "Credenciales inválidas para el usuario autenticado" });
-            }
-
-            var result = request.Enable
-                ? await _authOperations.EnableTwoFactorAsync(request.UserId)
-                : await _authOperations.DisableTwoFactorAsync(request.UserId);
-
-            if (result)
-            {
-                if (!request.Enable)
-                {
-                    await _twoFactorService.ClearTwoFactorCodeAsync(request.UserId);
-                }
-
-                await _auditLogService.LogActionAsync(
-                    userId: request.UserId,
-                    action: request.Enable ? "ENABLE_2FA" : "DISABLE_2FA",
-                    details: request.Enable ? "2FA habilitado exitosamente" : "2FA deshabilitado exitosamente",
-                    status: "SUCCESS");
-
-                return Result.Success();
-            }
-
-            return Result.Failure(new[]
-            {
-                request.Enable ? "No se pudo habilitar 2FA" : "No se pudo deshabilitar 2FA"
-            });
+            return Result.Success();
         }
         catch (Exception ex)
         {
             await _auditLogService.LogActionAsync(
-                userId: request.UserId,
-                action: request.Enable ? "ENABLE_2FA_ERROR" : "DISABLE_2FA_ERROR",
+                userId: userId,
+                action: "ENABLE_2FA",
+                ipAddress: "UNKNOWN",
+                userAgent: "UNKNOWN",
                 details: ex.Message,
                 status: "ERROR");
 
-            return Result.Failure(new[]
-            {
-                request.Enable ? "Error al habilitar 2FA" : "Error al deshabilitar 2FA"
-            });
+            return Result.Failure(Error.Failure("User.2FA", "Error al habilitar/deshabilitar 2FA"));
         }
     }
 }

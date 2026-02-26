@@ -1,4 +1,4 @@
-using SAPFIAI.Application.Common.Interfaces;
+﻿using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
 using MediatR;
 
@@ -24,14 +24,14 @@ public class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordCommand,
             request.Token,
             request.NewPassword);
 
-        if (!result.Succeeded)
+        if (!result.IsSuccess)
         {
             await _auditLogService.LogActionAsync(
                 userId: request.Email,
                 action: "PASSWORD_RESET_FAILED",
                 ipAddress: request.IpAddress ?? "UNKNOWN",
                 userAgent: request.UserAgent,
-                details: string.Join(", ", result.Errors),
+                details: result.Error.Description,
                 status: "FAILED");
 
             return result;
@@ -42,7 +42,7 @@ public class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordCommand,
             action: "PASSWORD_RESET_SUCCESS",
             ipAddress: request.IpAddress ?? "UNKNOWN",
             userAgent: request.UserAgent,
-            details: "Contrase�a restablecida exitosamente",
+            details: "Contraseña restablecida exitosamente",
             status: "SUCCESS");
 
         return Result.Success();

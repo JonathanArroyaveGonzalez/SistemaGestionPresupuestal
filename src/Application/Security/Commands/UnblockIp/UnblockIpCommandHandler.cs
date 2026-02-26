@@ -29,7 +29,7 @@ public class UnblockIpCommandHandler : IRequestHandler<UnblockIpCommand, Result>
 
         if (!wasUnblocked)
         {
-            return Result.Failure(new[] { "IP no encontrada en la lista de bloqueo" });
+            return Result.Failure(Error.NotFound("Security.IpNotBlocked", "IP no encontrada en la lista de bloqueo"));
         }
 
         await _auditLogService.LogActionAsync(

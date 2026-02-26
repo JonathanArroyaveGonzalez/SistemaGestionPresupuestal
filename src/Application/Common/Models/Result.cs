@@ -2,23 +2,48 @@
 
 public class Result
 {
-    internal Result(bool succeeded, IEnumerable<string> errors)
+    protected Result(bool isSuccess, Error error)
     {
-        Succeeded = succeeded;
-        Errors = errors.ToArray();
+        if (isSuccess && error != Error.None)
+        {
+            throw new InvalidOperationException("A success result cannot have an error.");
+        }
+
+        if (!isSuccess && error == Error.None)
+        {
+            throw new InvalidOperationException("A failure result must have an error.");
+        }
+
+        IsSuccess = isSuccess;
+        Error = error;
     }
 
-    public bool Succeeded { get; init; }
+    public bool IsSuccess { get; }
 
-    public string[] Errors { get; init; }
+    public bool IsFailure => !IsSuccess;
 
-    public static Result Success()
+    public Error Error { get; }
+
+    public static Result Success() => new(true, Error.None);
+
+    public static Result<TValue> Success<TValue>(TValue value) => new(value, true, Error.None);
+
+    public static Result Failure(Error error) => new(false, error);
+
+    public static Result<TValue> Failure<TValue>(Error error) => new(default, false, error);
+}
+
+public class Result<TValue> : Result
+{
+    private readonly TValue? _value;
+
+    protected internal Result(TValue? value, bool isSuccess, Error error)
+        : base(isSuccess, error)
     {
-        return new Result(true, Array.Empty<string>());
+        _value = value;
     }
 
-    public static Result Failure(IEnumerable<string> errors)
-    {
-        return new Result(false, errors);
-    }
+    public TValue Value => IsSuccess
+        ? _value!
+        : throw new InvalidOperationException("The value of a failure result can not be accessed.");
 }

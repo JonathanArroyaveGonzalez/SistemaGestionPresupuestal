@@ -25,7 +25,7 @@ public class UnlockAccountCommandHandler : IRequestHandler<UnlockAccountCommand,
 
         if (!wasUnlocked)
         {
-            return Result.Failure(new[] { "No se pudo desbloquear la cuenta" });
+            return Result.Failure(Error.Failure("Security.UnlockFailed", "No se pudo desbloquear la cuenta"));
         }
 
         await _auditLogService.LogActionAsync(
