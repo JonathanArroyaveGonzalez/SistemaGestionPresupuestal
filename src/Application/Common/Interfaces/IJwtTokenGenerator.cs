@@ -1,7 +1,7 @@
 namespace SAPFIAI.Application.Common.Interfaces;
 
 /// <summary>
-/// Interfaz para generación de tokens JWT
+/// Interfaz para generaciï¿½n de tokens JWT
 /// </summary>
 public interface IJwtTokenGenerator
 {
@@ -11,12 +11,12 @@ public interface IJwtTokenGenerator
     /// <param name="userId">ID del usuario</param>
     /// <param name="email">Email del usuario</param>
     /// <param name="roles">Roles del usuario (opcional)</param>
-    /// <param name="requiresTwoFactorVerification">Indica si el token requiere verificación 2FA</param>
+    /// <param name="requiresTwoFactorVerification">Indica si el token requiere verificaciï¿½n 2FA</param>
     /// <returns>Token JWT como string</returns>
-    string GenerateToken(string userId, string email, IEnumerable<string>? roles = null, bool requiresTwoFactorVerification = false);
+    string GenerateToken(string userId, string email, IEnumerable<string>? roles = null, IEnumerable<string>? permissions = null, bool requiresTwoFactorVerification = false);
 
     /// <summary>
-    /// Valida si un token tiene pendiente la verificación 2FA
+    /// Valida si un token tiene pendiente la verificaciï¿½n 2FA
     /// </summary>
     bool RequiresTwoFactorVerification(string token);
 
@@ -31,7 +31,7 @@ public interface IJwtTokenGenerator
     string GenerateRefreshToken();
 
     /// <summary>
-    /// Valida un token JWT y devuelve si es válido
+    /// Valida un token JWT y devuelve si es vï¿½lido
     /// </summary>
     bool ValidateToken(string token);
 

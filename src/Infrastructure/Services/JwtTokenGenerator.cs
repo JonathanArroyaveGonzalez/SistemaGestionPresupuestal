@@ -18,7 +18,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         _configuration = configuration;
     }
 
-    public string GenerateToken(string userId, string email, IEnumerable<string>? roles = null, bool requiresTwoFactorVerification = false)
+    public string GenerateToken(string userId, string email, IEnumerable<string>? roles = null, IEnumerable<string>? permissions = null, bool requiresTwoFactorVerification = false)
     {
         var jwtKey = _configuration["Jwt:Key"]
             ?? throw new InvalidOperationException("JWT Key is not configured. Set the 'Jwt:Key' configuration value.");
@@ -43,6 +43,14 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             foreach (var role in roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+        }
+
+        if (permissions != null)
+        {
+            foreach (var permission in permissions)
+            {
+                claims.Add(new Claim("permission", permission));
             }
         }
 

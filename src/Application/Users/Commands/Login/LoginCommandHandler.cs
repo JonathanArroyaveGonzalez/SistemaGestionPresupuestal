@@ -16,6 +16,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
     private readonly ILoginAttemptService _loginAttemptService;
     private readonly IAccountLockService _accountLockService;
     private readonly IRefreshTokenService _refreshTokenService;
+    private readonly IPermissionService _permissionService;
 
     public LoginCommandHandler(
         IAuthenticationOperations authOperations,
@@ -26,7 +27,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         IIpBlackListService ipBlackListService,
         ILoginAttemptService loginAttemptService,
         IAccountLockService accountLockService,
-        IRefreshTokenService refreshTokenService)
+        IRefreshTokenService refreshTokenService,
+        IPermissionService permissionService)
     {
         _authOperations = authOperations;
         _twoFactorService = twoFactorService;
@@ -37,6 +39,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         _loginAttemptService = loginAttemptService;
         _accountLockService = accountLockService;
         _refreshTokenService = refreshTokenService;
+        _permissionService = permissionService;
     }
 
     public async Task<LoginResponse> Handle(LoginCommand request, CancellationToken cancellationToken)
@@ -161,6 +164,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         }
 
         var userRoles = await _identityService.GetUserRolesAsync(userId);
+        var userPermissions = await _permissionService.GetUserPermissionsAsync(userId);
 
         // 6. Verificar si el usuario tiene 2FA habilitado
         var has2FA = await _twoFactorService.IsTwoFactorEnabledAsync(userId);
@@ -168,7 +172,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         if (has2FA)
         {
             // Flujo con 2FA: generar token temporal y enviar código
-            var tempToken = _jwtTokenGenerator.GenerateToken(userId, email, userRoles, requiresTwoFactorVerification: true);
+            var tempToken = _jwtTokenGenerator.GenerateToken(userId, email, userRoles, userPermissions, requiresTwoFactorVerification: true);
 
             var twoFactorSent = await _twoFactorService.GenerateAndSendTwoFactorCodeAsync(userId);
 
@@ -217,7 +221,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         }
 
         // 7. Flujo sin 2FA: login directo con token final + refresh token
-        var token = _jwtTokenGenerator.GenerateToken(userId, email, userRoles, requiresTwoFactorVerification: false);
+        var token = _jwtTokenGenerator.GenerateToken(userId, email, userRoles, userPermissions, requiresTwoFactorVerification: false);
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId, ipAddress);
 
         // 8. Resetear contadores de intentos fallidos

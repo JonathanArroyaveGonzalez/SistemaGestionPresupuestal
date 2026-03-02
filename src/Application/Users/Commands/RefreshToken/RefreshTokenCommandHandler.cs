@@ -11,6 +11,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, L
     private readonly IIdentityService _identityService;
     private readonly IAuthenticationOperations _authOperations;
     private readonly IAuditLogService _auditLogService;
+    private readonly IPermissionService _permissionService;
 
     public RefreshTokenCommandHandler(
         IRefreshTokenService refreshTokenService,
@@ -18,7 +19,8 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, L
         IJwtTokenGenerator jwtTokenGenerator,
         IIdentityService identityService,
         IAuthenticationOperations authOperations,
-        IAuditLogService auditLogService)
+        IAuditLogService auditLogService,
+        IPermissionService permissionService)
     {
         _refreshTokenService = refreshTokenService;
         _ipBlackListService = ipBlackListService;
@@ -26,13 +28,14 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, L
         _identityService = identityService;
         _authOperations = authOperations;
         _auditLogService = auditLogService;
+        _permissionService = permissionService;
     }
 
     public async Task<LoginResponse> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
     {
         var ipAddress = request.IpAddress ?? "UNKNOWN";
 
-        // 1. Verificar que la IP no esté bloqueada
+        // 1. Verificar que la IP no estï¿½ bloqueada
         var isIpBlocked = await _ipBlackListService.IsIpBlockedAsync(ipAddress);
         if (isIpBlocked)
         {
@@ -64,22 +67,23 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, L
                 action: "REFRESH_TOKEN_INVALID",
                 ipAddress: ipAddress,
                 userAgent: request.UserAgent,
-                details: "Refresh token inválido o expirado",
+                details: "Refresh token invï¿½lido o expirado",
                 status: "FAILED");
 
             return new LoginResponse
             {
                 Success = false,
-                Message = "Token de actualización inválido o expirado",
-                Errors = new[] { "Por favor, inicia sesión nuevamente" }
+                Message = "Token de actualizaciï¿½n invï¿½lido o expirado",
+                Errors = new[] { "Por favor, inicia sesiï¿½n nuevamente" }
             };
         }
 
-        // 3. Obtener roles del usuario
+        // 3. Obtener roles y permisos del usuario
         var userRoles = await _identityService.GetUserRolesAsync(userId);
+        var userPermissions = await _permissionService.GetUserPermissionsAsync(userId);
 
         // 4. Generar nuevo access token
-        var newAccessToken = _jwtTokenGenerator.GenerateToken(userId, email, userRoles);
+        var newAccessToken = _jwtTokenGenerator.GenerateToken(userId, email, userRoles, userPermissions);
 
         // 5. Generar nuevo refresh token y revocar el anterior
         var newRefreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId, ipAddress);
@@ -88,10 +92,10 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, L
             ipAddress, 
             "Replaced by new token");
 
-        // 6. Obtener información del usuario
+        // 6. Obtener informaciï¿½n del usuario
         var user = await _authOperations.GetUserByIdAsync(userId);
 
-        // 7. Auditar la acción
+        // 7. Auditar la acciï¿½n
         await _auditLogService.LogActionAsync(
             userId: userId,
             action: "REFRESH_TOKEN_SUCCESS",

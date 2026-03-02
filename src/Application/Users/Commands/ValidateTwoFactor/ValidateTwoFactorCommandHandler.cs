@@ -12,6 +12,7 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IIdentityService _identityService;
     private readonly IRefreshTokenService _refreshTokenService;
+    private readonly IPermissionService _permissionService;
 
     public ValidateTwoFactorCommandHandler(
         IAuthenticationOperations authOperations,
@@ -19,7 +20,8 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
         IAuditLogService auditLogService,
         IJwtTokenGenerator jwtTokenGenerator,
         IIdentityService identityService,
-        IRefreshTokenService refreshTokenService)
+        IRefreshTokenService refreshTokenService,
+        IPermissionService permissionService)
     {
         _authOperations = authOperations;
         _twoFactorService = twoFactorService;
@@ -27,6 +29,7 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
         _jwtTokenGenerator = jwtTokenGenerator;
         _identityService = identityService;
         _refreshTokenService = refreshTokenService;
+        _permissionService = permissionService;
     }
 
     public async Task<ValidateTwoFactorResponse> Handle(ValidateTwoFactorCommand request, CancellationToken cancellationToken)
@@ -110,7 +113,8 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
 
         // Generar nuevo JWT sin flag de 2FA pendiente
         var userRoles = await _identityService.GetUserRolesAsync(userId);
-        var newToken = _jwtTokenGenerator.GenerateToken(userId, user.Email ?? string.Empty, userRoles, requiresTwoFactorVerification: false);
+        var userPermissions = await _permissionService.GetUserPermissionsAsync(userId);
+        var newToken = _jwtTokenGenerator.GenerateToken(userId, user.Email ?? string.Empty, userRoles, userPermissions, requiresTwoFactorVerification: false);
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId, request.IpAddress ?? "UNKNOWN");
 
         // Actualizar datos de login
