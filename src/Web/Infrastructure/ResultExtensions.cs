@@ -40,6 +40,23 @@ public static class ResultExtensions
             });
     }
 
+    public static IResult ToCreatedResult<T>(this Result<T> result, Func<T, string> locationFactory)
+    {
+        if (result.IsSuccess)
+        {
+            return Results.Created(locationFactory(result.Value), result.Value);
+        }
+
+        return Results.Problem(
+            statusCode: GetStatusCode(result.Error.Code),
+            title: "Bad Request",
+            detail: result.Error.Description,
+            extensions: new Dictionary<string, object?>
+            {
+                { "errorCode", result.Error.Code }
+            });
+    }
+
     private static int GetStatusCode(string errorCode)
     {
         if (errorCode.Contains("NotFound", StringComparison.OrdinalIgnoreCase))
