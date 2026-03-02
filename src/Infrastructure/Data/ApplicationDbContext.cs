@@ -2,6 +2,7 @@
 using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Domain.Entities;
 using SAPFIAI.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 

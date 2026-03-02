@@ -16,5 +16,7 @@ public interface IApplicationDbContext
 
     DbSet<LoginAttempt> LoginAttempts { get; }
 
+    DbSet<T> Set<T>() where T : class;
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
