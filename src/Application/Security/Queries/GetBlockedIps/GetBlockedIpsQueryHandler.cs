@@ -1,9 +1,9 @@
 using SAPFIAI.Application.Common.Interfaces;
-using SAPFIAI.Domain.Entities;
+using SAPFIAI.Application.Common.Models;
 
 namespace SAPFIAI.Application.Security.Queries.GetBlockedIps;
 
-public class GetBlockedIpsQueryHandler : IRequestHandler<GetBlockedIpsQuery, IEnumerable<IpBlackList>>
+public class GetBlockedIpsQueryHandler : IRequestHandler<GetBlockedIpsQuery, IEnumerable<IpBlackListDto>>
 {
     private readonly IIpBlackListService _ipBlackListService;
 
@@ -12,8 +12,18 @@ public class GetBlockedIpsQueryHandler : IRequestHandler<GetBlockedIpsQuery, IEn
         _ipBlackListService = ipBlackListService;
     }
 
-    public async Task<IEnumerable<IpBlackList>> Handle(GetBlockedIpsQuery request, CancellationToken cancellationToken)
+    public async Task<IEnumerable<IpBlackListDto>> Handle(GetBlockedIpsQuery request, CancellationToken cancellationToken)
     {
-        return await _ipBlackListService.GetBlockedIpsAsync(request.ActiveOnly);
+        var ips = await _ipBlackListService.GetBlockedIpsAsync(request.ActiveOnly);
+        
+        return ips.Select(ip => new IpBlackListDto
+        {
+            Id = ip.Id,
+            IpAddress = ip.IpAddress,
+            Reason = ip.Reason,
+            IsActive = ip.IsActive,
+            ExpiryDate = ip.ExpiryDate,
+            CreatedAt = ip.BlockedDate
+        });
     }
 }

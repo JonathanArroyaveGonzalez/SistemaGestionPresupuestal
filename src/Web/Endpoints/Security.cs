@@ -3,7 +3,6 @@ using SAPFIAI.Application.Security.Commands.BlockIp;
 using SAPFIAI.Application.Security.Commands.UnblockIp;
 using SAPFIAI.Application.Security.Commands.UnlockAccount;
 using SAPFIAI.Application.Security.Queries.GetBlockedIps;
-using SAPFIAI.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using SAPFIAI.Web.Infrastructure;
@@ -17,11 +16,11 @@ public class Security : EndpointGroupBase
         var group = app.MapGroup(this)
             .WithName("Security")
             .WithOpenApi()
-            .RequireAuthorization("CanPurge"); // Solo administradores
+            .RequireAuthorization("CanPurge");
 
         group.MapGet("/blocked-ips", GetBlockedIps)
             .WithName("GetBlockedIps")
-            .Produces<IEnumerable<IpBlackList>>(StatusCodes.Status200OK)
+            .Produces<IEnumerable<IpBlackListDto>>(StatusCodes.Status200OK)
             .WithOpenApi();
 
         group.MapPost("/block-ip", BlockIp)
@@ -40,7 +39,7 @@ public class Security : EndpointGroupBase
             .WithOpenApi();
     }
 
-    private static async Task<IEnumerable<IpBlackList>> GetBlockedIps(
+    private static async Task<IEnumerable<IpBlackListDto>> GetBlockedIps(
         IMediator mediator,
         [FromQuery] bool activeOnly = true)
     {
@@ -48,25 +47,28 @@ public class Security : EndpointGroupBase
         return await mediator.Send(query);
     }
 
-    private static async Task<Result> BlockIp(
+    private static async Task<IResult> BlockIp(
         [FromBody] BlockIpCommand command,
         IMediator mediator)
     {
-        return await mediator.Send(command);
+        var result = await mediator.Send(command);
+        return result.ToHttpResult();
     }
 
-    private static async Task<Result> UnblockIp(
+    private static async Task<IResult> UnblockIp(
         [FromBody] UnblockIpCommand command,
         IMediator mediator)
     {
-        return await mediator.Send(command);
+        var result = await mediator.Send(command);
+        return result.ToHttpResult();
     }
 
-    private static async Task<Result> UnlockAccount(
+    private static async Task<IResult> UnlockAccount(
         [FromBody] UnlockAccountCommand command,
         IMediator mediator)
     {
-        return await mediator.Send(command);
+        var result = await mediator.Send(command);
+        return result.ToHttpResult();
     }
 }
 
