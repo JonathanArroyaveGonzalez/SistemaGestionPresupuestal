@@ -1,4 +1,4 @@
-﻿using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
 using SAPFIAI.Application.Users.Commands.EnableTwoFactor;
 using SAPFIAI.Application.Users.Commands.ForgotPassword;
@@ -21,77 +21,94 @@ public class Authentication : EndpointGroupBase
     public override void Map(WebApplication app)
     {
         var group = app.MapGroup(this)
-            .WithName("Authentication")
-            .WithOpenApi();
+            .WithName("Authentication");
 
-        // Endpoints p�blicos (sin autenticaci�n)
         group.MapPost("/register", Register)
             .WithName("Register")
-            .WithOpenApi()
+            .WithSummary("Registrar usuario")
+            .WithDescription("Crea una nueva cuenta de usuario. Requiere email, password y confirmación.")
             .Produces<RegisterResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .AllowAnonymous();
 
         group.MapPost("/login", Login)
             .WithName("Login")
-            .WithOpenApi()
+            .WithSummary("Iniciar sesión")
+            .WithDescription("Autentica al usuario y retorna JWT + refresh token. Si tiene 2FA activo, retorna `requires2FA: true` y no incluye token.")
             .Produces<LoginResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
             .AllowAnonymous();
 
         group.MapPost("/verify-2fa", VerifyTwoFactor)
             .WithName("Verify2FA")
-            .WithOpenApi()
+            .WithSummary("Verificar código 2FA")
+            .WithDescription("Valida el código OTP de 6 dígitos enviado por email. Requiere el token temporal retornado por `/login`.")
             .Produces<ValidateTwoFactorResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
             .AllowAnonymous();
-
 
         group.MapPost("/forgot-password", ForgotPassword)
             .WithName("ForgotPassword")
-            .WithOpenApi()
+            .WithSummary("Solicitar restablecimiento de contraseña")
+            .WithDescription("Envía un email con el token para restablecer la contraseña.")
             .Produces<Result>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
             .AllowAnonymous();
 
         group.MapPost("/reset-password", ResetPassword)
             .WithName("ResetPassword")
-            .WithOpenApi()
+            .WithSummary("Restablecer contraseña")
+            .WithDescription("Establece una nueva contraseña usando el token recibido por email.")
             .Produces<Result>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
             .AllowAnonymous();
 
         group.MapPost("/refresh-token", RefreshToken)
             .WithName("RefreshToken")
-            .WithOpenApi()
+            .WithSummary("Renovar token JWT")
+            .WithDescription("Genera un nuevo JWT usando un refresh token válido y no revocado.")
             .Produces<LoginResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
             .AllowAnonymous();
 
-        // Endpoints protegidos (requieren autenticaci�n)
         group.MapPost("/logout", Logout)
             .WithName("Logout")
-            .WithOpenApi()
+            .WithSummary("Cerrar sesión")
+            .WithDescription("Invalida el refresh token activo del usuario autenticado.")
             .Produces<Result>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
             .RequireAuthorization();
 
         group.MapPost("/revoke-token", RevokeToken)
             .WithName("RevokeToken")
-            .WithOpenApi()
+            .WithSummary("Revocar refresh token")
+            .WithDescription("Revoca un refresh token específico. Útil para cerrar sesión en otros dispositivos.")
             .Produces<Result>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
             .RequireAuthorization();
 
         group.MapPost("/enable-2fa", EnableTwoFactor)
             .WithName("EnableTwoFactor")
-            .WithOpenApi()
+            .WithSummary("Activar / desactivar 2FA")
+            .WithDescription("Habilita o deshabilita la autenticación de dos factores para el usuario autenticado. Envía código OTP por email al activar.")
             .Produces<Result>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
             .RequireAuthorization();
 
         group.MapGet("/audit-logs", GetAuditLogs)
             .WithName("GetAuditLogs")
+            .WithSummary("Obtener logs de auditoría")
+            .WithDescription("Retorna logs paginados de todas las acciones del sistema. Soporta filtros por acción, fecha y paginación.")
             .Produces<IEnumerable<AuditLogDto>>(StatusCodes.Status200OK)
-            .WithOpenApi()
-            .RequireAuthorization("CanPurge");
+            .Produces(StatusCodes.Status401Unauthorized)
+            .RequireAuthorization();
 
         group.MapGet("/audit-logs/user/{userId}", GetUserAuditLogs)
             .WithName("GetUserAuditLogs")
+            .WithSummary("Obtener logs de auditoría por usuario")
+            .WithDescription("Retorna logs paginados de las acciones de un usuario específico identificado por su `userId`.")
             .Produces<IEnumerable<AuditLogDto>>(StatusCodes.Status200OK)
-            .WithOpenApi()
+            .Produces(StatusCodes.Status401Unauthorized)
             .RequireAuthorization();
     }
 
@@ -136,7 +153,6 @@ public class Authentication : EndpointGroupBase
 
         return await mediator.Send(command);
     }
-
 
     private static async Task<Result> ForgotPassword(
         [FromBody] ForgotPasswordCommand command,
@@ -254,4 +270,3 @@ public class Authentication : EndpointGroupBase
         return await mediator.Send(query);
     }
 }
-
