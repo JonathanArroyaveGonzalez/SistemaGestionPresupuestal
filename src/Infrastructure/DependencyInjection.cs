@@ -1,14 +1,11 @@
-﻿using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Domain.Constants;
 using SAPFIAI.Infrastructure.Data;
 using SAPFIAI.Infrastructure.Data.Interceptors;
 using SAPFIAI.Infrastructure.Identity;
 using SAPFIAI.Infrastructure.Services;
-using SAPFIAI.Infrastructure.BackgroundJobs;
-using SAPFIAI.Infrastructure.Authorization;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -31,12 +28,10 @@ public static class DependencyInjection
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
         {
             options.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
-
             options.UseSqlServer(connectionString);
         });
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
-
         services.AddScoped<ApplicationDbContextInitialiser>();
 
         var jwtKey = configuration["Jwt:Key"]
@@ -71,34 +66,26 @@ public static class DependencyInjection
 
         services.AddSingleton(TimeProvider.System);
         services.AddTransient<IIdentityService, IdentityService>();
-
         services.AddMemoryCache();
 
-        // Registrar servicios de email, 2FA y auditoría
         services.AddHttpClient<IEmailService, BrevoEmailService>();
         services.AddScoped<ITwoFactorService, TwoFactorService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IAuthenticationOperations, AuthenticationOperations>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-
-        // Registrar servicios de seguridad
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
-        services.AddScoped<IIpBlackListService, IpBlackListService>();
-        services.AddScoped<ILoginAttemptService, LoginAttemptService>();
         services.AddScoped<IAccountLockService, AccountLockService>();
-        services.AddScoped<IPermissionService, PermissionService>();
-        services.AddScoped<IRoleService, RoleService>();
 
-        // Registrar Background Jobs
-        services.AddHostedService<SecurityCleanupJob>();
+        // Permit.io RBAC
+        services.AddSingleton<PermitAuthorizationService>();
+        services.AddSingleton<IPermitAuthorizationService>(sp => sp.GetRequiredService<PermitAuthorizationService>());
+        services.AddScoped<IPermitSetupService, PermitSetupService>();
 
         services.AddAuthorization(options =>
         {
             options.AddPolicy(Policies.CanPurge, policy => policy.RequireRole(Roles.Administrator));
             options.AddPolicy(Policies.RequireAdministrator, policy => policy.RequireRole(Roles.Administrator));
         });
-
-        services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
         return services;
     }
