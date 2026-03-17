@@ -11,9 +11,6 @@ using Microsoft.Extensions.Logging;
 
 namespace SAPFIAI.Infrastructure.Services;
 
-/// <summary>
-/// Implementación del servicio de autenticación de dos factores
-/// </summary>
 public class TwoFactorService : ITwoFactorService
 {
     private readonly IEmailService _emailService;
@@ -40,13 +37,8 @@ public class TwoFactorService : ITwoFactorService
         _cache = cache;
     }
 
-    /// <summary>
-    /// Obtiene una variable de configuración desde IConfiguration o Environment
-    /// </summary>
-    private string? GetConfigValue(string key)
-    {
-        return _configuration[key] ?? Environment.GetEnvironmentVariable(key);
-    }
+    private string? GetConfigValue(string key) =>
+        _configuration[key] ?? Environment.GetEnvironmentVariable(key);
 
     public async Task<bool> GenerateAndSendTwoFactorCodeAsync(string userId)
     {
@@ -54,41 +46,28 @@ public class TwoFactorService : ITwoFactorService
         {
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null)
-            {
                 return false;
-            }
 
-            // Generar código de 6 dígitos
             var code = GenerateRandomCode(6);
 
-            // Configurar expiración (por defecto 10 minutos)
             var expirationConfig = GetConfigValue("TWO_FACTOR_EXPIRATION_MINUTES");
             var expirationMinutes = int.Parse(expirationConfig ?? "10");
 
-            var cacheOptions = new MemoryCacheEntryOptions
+            _cache.Set(GetCacheKey(userId), code, new MemoryCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(expirationMinutes)
-            };
+            });
 
-            _cache.Set(GetCacheKey(userId), code, cacheOptions);
-
-            // En desarrollo, mostrar el código en la consola
             if (_environment.IsDevelopment())
             {
-                _logger.LogWarning("═══════════════════════════════════════════════════════════");
-                _logger.LogWarning("  🔐 CÓDIGO 2FA (SOLO DESARROLLO): {Code}", code);
-                _logger.LogWarning("  📧 Usuario: {Email}", user.Email);
-                _logger.LogWarning("  ⏰ Expira en: {Minutes} minutos", expirationMinutes);
-                _logger.LogWarning("═══════════════════════════════════════════════════════════");
+                _logger.LogWarning("2FA CODE (DEV ONLY): {Code} | User: {Email} | Expires: {Minutes}min", code, user.Email, expirationMinutes);
             }
 
-            // Intentar enviar email
             var emailSent = await _emailService.SendTwoFactorCodeAsync(user.Email!, code, user.UserName ?? user.Email!);
 
-            // En desarrollo, retornar true incluso si el email falla
             if (_environment.IsDevelopment() && !emailSent)
             {
-                _logger.LogWarning("⚠️ Email no enviado, pero en desarrollo se permite continuar con el código mostrado arriba.");
+                _logger.LogWarning("Email not sent, but dev mode allows continuing with code shown above.");
                 return true;
             }
 
@@ -107,26 +86,16 @@ public class TwoFactorService : ITwoFactorService
         {
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null)
-            {
                 return false;
-            }
 
             if (!_cache.TryGetValue(GetCacheKey(userId), out string? cachedCode) || string.IsNullOrEmpty(cachedCode))
-            {
                 return false;
-            }
 
-            // Comparación timing-safe para evitar timing attacks
             var expectedBytes = Encoding.UTF8.GetBytes(cachedCode);
             var providedBytes = Encoding.UTF8.GetBytes(code.Trim());
 
-            if (expectedBytes.Length != providedBytes.Length ||
-                !CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes))
-            {
-                return false;
-            }
-
-            return true;
+            return expectedBytes.Length == providedBytes.Length &&
+                   CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
         }
         catch (Exception ex)
         {
@@ -137,15 +106,8 @@ public class TwoFactorService : ITwoFactorService
 
     public Task ClearTwoFactorCodeAsync(string userId)
     {
-        try
-        {
-            _cache.Remove(GetCacheKey(userId));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error clearing 2FA code");
-        }
-
+        try { _cache.Remove(GetCacheKey(userId)); }
+        catch (Exception ex) { _logger.LogError(ex, "Error clearing 2FA code"); }
         return Task.CompletedTask;
     }
 
@@ -154,7 +116,7 @@ public class TwoFactorService : ITwoFactorService
         try
         {
             var user = await _userManager.FindByIdAsync(userId);
-            return user?.IsTwoFactorEnabled ?? false;
+            return user?.TwoFactorEnabled ?? false;
         }
         catch (Exception ex)
         {
@@ -163,9 +125,6 @@ public class TwoFactorService : ITwoFactorService
         }
     }
 
-    /// <summary>
-    /// Genera un código numérico aleatorio usando un generador criptográficamente seguro
-    /// </summary>
     private static string GenerateRandomCode(int length)
     {
         using var rng = RandomNumberGenerator.Create();
