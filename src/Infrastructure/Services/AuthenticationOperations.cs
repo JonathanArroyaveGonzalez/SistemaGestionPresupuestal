@@ -6,9 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace SAPFIAI.Infrastructure.Services;
 
-/// <summary>
-/// Implementación de operaciones de autenticación
-/// </summary>
 public class AuthenticationOperations : IAuthenticationOperations
 {
     private readonly UserManager<ApplicationUser> _userManager;
@@ -57,7 +54,7 @@ public class AuthenticationOperations : IAuthenticationOperations
                 Email = user.Email!,
                 UserName = user.UserName,
                 PhoneNumber = user.PhoneNumber,
-                TwoFactorEnabled = user.IsTwoFactorEnabled,
+                TwoFactorEnabled = user.TwoFactorEnabled,
                 LastLoginDate = user.LastLoginDate,
                 LastLoginIp = user.LastLoginIp
             };
@@ -83,7 +80,7 @@ public class AuthenticationOperations : IAuthenticationOperations
                 Email = user.Email!,
                 UserName = user.UserName,
                 PhoneNumber = user.PhoneNumber,
-                TwoFactorEnabled = user.IsTwoFactorEnabled,
+                TwoFactorEnabled = user.TwoFactorEnabled,
                 LastLoginDate = user.LastLoginDate,
                 LastLoginIp = user.LastLoginIp
             };
@@ -118,7 +115,7 @@ public class AuthenticationOperations : IAuthenticationOperations
         try
         {
             var user = await _userManager.FindByIdAsync(userId);
-            return user?.IsTwoFactorEnabled ?? false;
+            return user?.TwoFactorEnabled ?? false;
         }
         catch (Exception ex)
         {
@@ -135,8 +132,7 @@ public class AuthenticationOperations : IAuthenticationOperations
             if (user == null)
                 return false;
 
-            user.IsTwoFactorEnabled = true;
-            var result = await _userManager.UpdateAsync(user);
+            var result = await _userManager.SetTwoFactorEnabledAsync(user, true);
             return result.Succeeded;
         }
         catch (Exception ex)
@@ -154,8 +150,7 @@ public class AuthenticationOperations : IAuthenticationOperations
             if (user == null)
                 return false;
 
-            user.IsTwoFactorEnabled = false;
-            var result = await _userManager.UpdateAsync(user);
+            var result = await _userManager.SetTwoFactorEnabledAsync(user, false);
             return result.Succeeded;
         }
         catch (Exception ex)
