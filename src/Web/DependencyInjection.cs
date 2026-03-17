@@ -1,78 +1,104 @@
-﻿using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Infrastructure.Data;
 using SAPFIAI.Web.Services;
 using Microsoft.AspNetCore.Mvc;
-
-using NSwag;
-using NSwag.Generation.Processors.Security;
-using ZymLabs.NSwag.FluentValidation;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddWebServices(this IServiceCollection services)
+    public static IServiceCollection AddWebServices(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
     {
         services.AddDatabaseDeveloperPageExceptionFilter();
 
         services.AddScoped<IUser, CurrentUser>();
-
         services.AddScoped<IHttpContextInfo, HttpContextInfo>();
-
         services.AddHttpContextAccessor();
 
         services.AddHealthChecks()
             .AddDbContextCheck<ApplicationDbContext>();
 
         services.AddExceptionHandler<CustomExceptionHandler>();
-
         services.AddRazorPages();
 
-        services.AddScoped(provider =>
-        {
-            var validationRules = provider.GetService<IEnumerable<FluentValidationRule>>();
-            var loggerFactory = provider.GetService<ILoggerFactory>();
-
-            return new FluentValidationSchemaProcessor(provider, validationRules, loggerFactory);
-        });
-
-        // Customise default API behaviour
         services.Configure<ApiBehaviorOptions>(options =>
             options.SuppressModelStateInvalidFilter = true);
 
-        services.AddEndpointsApiExplorer();
-
-        services.AddOpenApiDocument((configure, sp) =>
+        services.AddOpenApi(options =>
         {
-            configure.Title = "SAPFIAI API";
+            options.ShouldInclude = (desc) => true;
 
-            // Add the fluent validations schema processor
-            var fluentValidationSchemaProcessor = 
-                sp.CreateScope().ServiceProvider.GetRequiredService<FluentValidationSchemaProcessor>();
-
-            // BUG: SchemaProcessors is missing in NSwag 14 (https://github.com/RicoSuter/NSwag/issues/4524#issuecomment-1811897079)
-            // configure.SchemaProcessors.Add(fluentValidationSchemaProcessor);
-
-            // Add JWT
-            configure.AddSecurity("JWT", Enumerable.Empty<string>(), new OpenApiSecurityScheme
+            options.AddDocumentTransformer((doc, ctx, ct) =>
             {
-                Type = OpenApiSecuritySchemeType.ApiKey,
-                Name = "Authorization",
-                In = OpenApiSecurityApiKeyLocation.Header,
-                Description = "Type into the textbox: Bearer {your JWT token}."
+                doc.Info = new()
+                {
+                    Title = "SAPFIAI API",
+                    Version = "v1",
+                    Description = "API de autenticación y gestión de usuarios — SAPFIAI"
+                };
+
+                doc.Components ??= new();
+                doc.Components.SecuritySchemes = new Dictionary<string, Microsoft.OpenApi.IOpenApiSecurityScheme>
+                {
+                    ["Bearer"] = new Microsoft.OpenApi.OpenApiSecurityScheme
+                    {
+                        Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+                        Scheme = "bearer",
+                        BearerFormat = "JWT",
+                        Description = "Ingresa el token JWT. Ejemplo: eyJhbGci..."
+                    }
+                };
+                return Task.CompletedTask;
             });
 
-            configure.OperationProcessors.Add(new AspNetCoreOperationSecurityScopeProcessor("JWT"));
+            options.AddOperationTransformer((operation, ctx, ct) =>
+            {
+                var requiresAuth = ctx.Description.ActionDescriptor.EndpointMetadata
+                    .OfType<Microsoft.AspNetCore.Authorization.IAuthorizeData>().Any();
+
+                if (requiresAuth)
+                {
+                    operation.Security =
+                    [
+                        new Microsoft.OpenApi.OpenApiSecurityRequirement
+                        {
+                            [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer", null)] = []
+                        }
+                    ];
+                }
+                return Task.CompletedTask;
+            });
         });
+        services.AddEndpointsApiExplorer();
 
         services.AddCors(options =>
         {
-            options.AddPolicy("DevelopmentCors", policy =>
-                policy.AllowAnyOrigin()
-                      .AllowAnyHeader()
-                      .AllowAnyMethod());
-        });
+            if (environment.IsDevelopment())
+            {
+                options.AddPolicy("DevelopmentCors", policy =>
+                    policy.AllowAnyOrigin()
+                          .AllowAnyHeader()
+                          .AllowAnyMethod());
+            }
+            else
+            {
+                var rawOrigins = configuration["AllowedOrigins"] ?? string.Empty;
+                var origins = rawOrigins
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(o => !string.IsNullOrWhiteSpace(o))
+                    .ToArray();
 
+                if (origins.Length == 0)
+                    throw new InvalidOperationException(
+                        "AllowedOrigins must be configured in production. Set the 'AllowedOrigins' environment variable.");
+
+                options.AddPolicy("ProductionCors", policy =>
+                    policy.WithOrigins(origins)
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials());
+            }
+        });
 
         return services;
     }
