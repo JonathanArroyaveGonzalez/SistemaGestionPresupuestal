@@ -229,138 +229,6 @@ namespace SAPFIAI.Infrastructure.Data.Migrations
                     b.ToTable("AuditLogs");
                 });
 
-            modelBuilder.Entity("SAPFIAI.Domain.Entities.IpBlackList", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BlackListReason")
-                        .HasColumnType("int");
-
-                    b.Property<string>("BlockedBy")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("BlockedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("ExpiryDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("IpAddress")
-                        .IsRequired()
-                        .HasMaxLength(45)
-                        .HasColumnType("nvarchar(45)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BlockedDate");
-
-                    b.HasIndex("IpAddress");
-
-                    b.ToTable("IpBlackLists");
-                });
-
-            modelBuilder.Entity("SAPFIAI.Domain.Entities.LoginAttempt", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("AttemptDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("FailureReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int?>("FailureReasonType")
-                        .HasColumnType("int");
-
-                    b.Property<string>("IpAddress")
-                        .IsRequired()
-                        .HasMaxLength(45)
-                        .HasColumnType("nvarchar(45)");
-
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("WasSuccessful")
-                        .HasColumnType("bit");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AttemptDate");
-
-                    b.HasIndex("Email");
-
-                    b.HasIndex("IpAddress");
-
-                    b.HasIndex("Email", "AttemptDate");
-
-                    b.HasIndex("IpAddress", "AttemptDate");
-
-                    b.ToTable("LoginAttempts");
-                });
-
-            modelBuilder.Entity("SAPFIAI.Domain.Entities.Permission", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Module")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Module");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("Permissions", (string)null);
-                });
-
             modelBuilder.Entity("SAPFIAI.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<int>("Id")
@@ -419,39 +287,6 @@ namespace SAPFIAI.Infrastructure.Data.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
-            modelBuilder.Entity("SAPFIAI.Domain.Entities.RolePermission", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("AssignedBy")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int>("PermissionId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("RoleId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PermissionId");
-
-                    b.HasIndex("RoleId", "PermissionId")
-                        .IsUnique();
-
-                    b.ToTable("RolePermissions", (string)null);
-                });
-
             modelBuilder.Entity("SAPFIAI.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -470,15 +305,6 @@ namespace SAPFIAI.Infrastructure.Data.Migrations
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
-
-                    b.Property<int>("FailedLoginAttempts")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsTwoFactorEnabled")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("LastFailedLoginAttempt")
-                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("LastLoginDate")
                         .HasColumnType("datetime2");
@@ -588,22 +414,6 @@ namespace SAPFIAI.Infrastructure.Data.Migrations
                     b.HasOne("SAPFIAI.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany("AuditLogs")
                         .HasForeignKey("ApplicationUserId");
-                });
-
-            modelBuilder.Entity("SAPFIAI.Domain.Entities.RolePermission", b =>
-                {
-                    b.HasOne("SAPFIAI.Domain.Entities.Permission", "Permission")
-                        .WithMany("RolePermissions")
-                        .HasForeignKey("PermissionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Permission");
-                });
-
-            modelBuilder.Entity("SAPFIAI.Domain.Entities.Permission", b =>
-                {
-                    b.Navigation("RolePermissions");
                 });
 
             modelBuilder.Entity("SAPFIAI.Infrastructure.Identity.ApplicationUser", b =>
