@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Infrastructure.Identity;
@@ -25,8 +24,7 @@ public class AccountLockService : IAccountLockService
         if (user == null)
             return false;
 
-        var lockoutEnd = DateTime.UtcNow.AddMinutes(lockoutMinutes);
-        await _userManager.SetLockoutEndDateAsync(user, lockoutEnd);
+        await _userManager.SetLockoutEndDateAsync(user, DateTime.UtcNow.AddMinutes(lockoutMinutes));
         await _userManager.SetLockoutEnabledAsync(user, true);
 
         return true;
@@ -39,10 +37,7 @@ public class AccountLockService : IAccountLockService
             return false;
 
         await _userManager.SetLockoutEndDateAsync(user, null);
-        user.FailedLoginAttempts = 0;
-        user.LastFailedLoginAttempt = null;
-
-        await _userManager.UpdateAsync(user);
+        await _userManager.ResetAccessFailedCountAsync(user);
 
         return true;
     }
@@ -62,20 +57,18 @@ public class AccountLockService : IAccountLockService
         if (user == null)
             return 0;
 
-        user.FailedLoginAttempts++;
-        user.LastFailedLoginAttempt = DateTime.UtcNow;
+        await _userManager.AccessFailedAsync(user);
 
-        await _userManager.UpdateAsync(user);
-
-        // Bloquear cuenta si se excede el límite
         var maxAttempts = _configuration.GetValue<int>("Security:AccountLock:MaxFailedAttempts", 5);
-        if (user.FailedLoginAttempts >= maxAttempts)
+        var failedCount = await _userManager.GetAccessFailedCountAsync(user);
+
+        if (failedCount >= maxAttempts)
         {
             var lockoutMinutes = _configuration.GetValue<int>("Security:AccountLock:LockoutMinutes", 15);
             await LockAccountAsync(userId, lockoutMinutes);
         }
 
-        return user.FailedLoginAttempts;
+        return failedCount;
     }
 
     public async Task ResetFailedAttemptsAsync(string userId)
@@ -84,10 +77,7 @@ public class AccountLockService : IAccountLockService
         if (user == null)
             return;
 
-        user.FailedLoginAttempts = 0;
-        user.LastFailedLoginAttempt = null;
-
-        await _userManager.UpdateAsync(user);
+        await _userManager.ResetAccessFailedCountAsync(user);
     }
 
     public async Task<(bool isLocked, DateTime? lockoutEnd, int failedAttempts)> GetAccountLockStatusAsync(string userId)
@@ -98,7 +88,8 @@ public class AccountLockService : IAccountLockService
 
         var isLocked = await _userManager.IsLockedOutAsync(user);
         var lockoutEnd = await _userManager.GetLockoutEndDateAsync(user);
+        var failedCount = await _userManager.GetAccessFailedCountAsync(user);
 
-        return (isLocked, lockoutEnd?.UtcDateTime, user.FailedLoginAttempts);
+        return (isLocked, lockoutEnd?.UtcDateTime, failedCount);
     }
 }
