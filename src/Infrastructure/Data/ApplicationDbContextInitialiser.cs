@@ -131,21 +131,7 @@ public class ApplicationDbContextInitialiser
             });
             await permitProvisioning.AssignRoleAsync(administrator.Id, PermitConstants.Roles.Admin);
 
-            var permitAuthorization = scope.ServiceProvider.GetRequiredService<IPermitAuthorizationService>();
-            var adminCanCreateUsers = await permitAuthorization.IsAllowedAsync(
-                administrator.Id,
-                PermitConstants.Actions.Create,
-                PermitConstants.Resources.ManageUsers);
-
-            if (!adminCanCreateUsers)
-            {
-                _logger.LogWarning("Bootstrap admin could not be verified in Permit.io (manage_users:create denied). " +
-                                   "The authorization model may not be fully provisioned yet.");
-            }
-            else
-            {
-                _logger.LogInformation("Permit.io bootstrap completed. Admin has manage_users:create.");
-            }
+            _logger.LogInformation("Permit.io bootstrap completed. Admin synced and role assigned.");
         }
         catch (Exception ex)
         {

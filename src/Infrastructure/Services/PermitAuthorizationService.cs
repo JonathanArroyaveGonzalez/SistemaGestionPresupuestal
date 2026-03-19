@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PermitSDK;
 using SAPFIAI.Application.Common.Interfaces;
@@ -18,23 +17,27 @@ public class PermitAuthorizationService : IPermitAuthorizationService
     private readonly ILogger<PermitAuthorizationService> _logger;
     private readonly int _checkRetries;
     private readonly int _initialBackoffMs;
-    private readonly HttpClient _http;
+    private readonly HttpClient _http;        // Management API — api.permit.io
+    private readonly HttpClient _pdp;         // Cloud PDP — cloudpdp.api.permit.io
     private readonly string _apiKey;
 
     public Permit Client => _permit;
     public string ProjectId { get; }
     public string EnvironmentId { get; }
 
-    public PermitAuthorizationService(IConfiguration configuration, IHostEnvironment environment, ILogger<PermitAuthorizationService> logger)
+    public PermitAuthorizationService(IConfiguration configuration, ILogger<PermitAuthorizationService> logger)
     {
         _logger = logger;
 
-        var envSuffix = environment.IsProduction() ? "PRODUCTION" : "DEVELOPMENT";
-
-        // PERMITIO__ env vars map to "Permitio:" section (case-preserved by ASP.NET Core)
-        var apiKey = GetConfig(configuration, $"Permitio:EnvironmentKey_{envSuffix}")
-            ?? GetConfig(configuration, $"PermitIo:EnvironmentKey_{envSuffix}")
-            ?? throw new InvalidOperationException($"Permit.io key not configured. Set 'PERMITIO__ENVIRONMENTKEY_{envSuffix}' env var.");
+        // Resolve API key: try explicit single key first, then environment-suffixed variants.
+        // This avoids depending on ASPNETCORE_ENVIRONMENT which launchSettings.json can override.
+        var apiKey = GetConfig(configuration, "Permitio:EnvironmentKey")
+            ?? GetConfig(configuration, "PermitIo:EnvironmentKey")
+            ?? GetConfig(configuration, "Permitio:EnvironmentKey_PRODUCTION")
+            ?? GetConfig(configuration, "PermitIo:EnvironmentKey_PRODUCTION")
+            ?? GetConfig(configuration, "Permitio:EnvironmentKey_DEVELOPMENT")
+            ?? GetConfig(configuration, "PermitIo:EnvironmentKey_DEVELOPMENT")
+            ?? throw new InvalidOperationException("Permit.io key not configured. Set 'PERMITIO__ENVIRONMENTKEY' env var.");
 
         var pdpUrl = GetConfig(configuration, "Permitio:PdpUrl")
             ?? GetConfig(configuration, "PermitIo:PdpUrl")
@@ -44,20 +47,29 @@ public class PermitAuthorizationService : IPermitAuthorizationService
             ?? GetConfig(configuration, "PermitIo:ProjectId")
             ?? throw new InvalidOperationException("Permit.io ProjectId not configured. Set 'PERMITIO__PROJECTID' env var.");
 
-        EnvironmentId = GetConfig(configuration, $"Permitio:EnvironmentId_{envSuffix}")
-            ?? GetConfig(configuration, $"PermitIo:EnvironmentId_{envSuffix}")
-            ?? throw new InvalidOperationException($"Permit.io EnvironmentId not configured. Set 'PERMITIO__ENVIRONMENTID_{envSuffix}' env var.");
+        EnvironmentId = GetConfig(configuration, "Permitio:EnvironmentId")
+            ?? GetConfig(configuration, "PermitIo:EnvironmentId")
+            ?? GetConfig(configuration, "Permitio:EnvironmentId_PRODUCTION")
+            ?? GetConfig(configuration, "PermitIo:EnvironmentId_PRODUCTION")
+            ?? GetConfig(configuration, "Permitio:EnvironmentId_DEVELOPMENT")
+            ?? GetConfig(configuration, "PermitIo:EnvironmentId_DEVELOPMENT")
+            ?? throw new InvalidOperationException("Permit.io EnvironmentId not configured. Set 'PERMITIO__ENVIRONMENTID' env var.");
 
         _checkRetries = Math.Max(0, configuration.GetValue<int?>("Permitio:CheckRetries") ?? 3);
         _initialBackoffMs = Math.Max(100, configuration.GetValue<int?>("Permitio:CheckInitialBackoffMs") ?? 250);
 
         _apiKey = apiKey;
-        _logger.LogInformation("Permit.io iniciado — entorno: {Env}, project: {Proj}, environment: {EnvId}", envSuffix, ProjectId, EnvironmentId);
+        _logger.LogInformation("Permit.io iniciado — project: {Proj}, environment: {EnvId}", ProjectId, EnvironmentId);
         _permit = new Permit(apiKey, pdpUrl);
 
         _http = new HttpClient { BaseAddress = new Uri("https://api.permit.io") };
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var pdpHandler = new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(1) };
+        _pdp = new HttpClient(pdpHandler) { BaseAddress = new Uri(pdpUrl.TrimEnd('/') + "/") };
+        _pdp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        _pdp.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
     /// <summary>GET /v2/schema/{project}/{env}/{path}</summary>
@@ -71,49 +83,60 @@ public class PermitAuthorizationService : IPermitAuthorizationService
 
     public async Task<bool> IsAllowedAsync(string userId, string action, string resource)
     {
+        // Use the REST API directly instead of the SDK PDP client.
+        // The SDK Enforcer creates its HttpClient at construction time and can cache
+        // a failed DNS resolution, causing persistent "No such host" errors.
         Exception? lastException = null;
 
         for (var attempt = 1; attempt <= _checkRetries + 1; attempt++)
         {
             try
             {
-                var allowed = await _permit.Check(userId, action, resource);
+                var body = new
+                {
+                    user = new { key = userId },
+                    action,
+                    resource = new { type = resource, tenant = "default" }
+                };
+
+                var response = await _pdp.PostAsJsonAsync("/allowed", body);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Permit.io /allowed returned {Status} for user={UserId} action={Action} resource={Resource}",
+                        (int)response.StatusCode, userId, action, resource);
+                    return false;
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<PermitAllowedResponse>();
+                var allowed = result?.Allow ?? false;
+
                 _logger.LogDebug("Permit.io check: user={UserId} action={Action} resource={Resource} => {Result}",
                     userId, action, resource, allowed);
+
                 return allowed;
             }
             catch (Exception ex) when (IsTransient(ex) && attempt <= _checkRetries)
             {
                 lastException = ex;
                 var delayMs = _initialBackoffMs * (1 << (attempt - 1));
-
                 _logger.LogWarning(ex,
                     "Permit.io transient failure (attempt {Attempt}/{MaxAttempts}) for user={UserId} action={Action} resource={Resource}. Retrying in {Delay}ms.",
-                    attempt,
-                    _checkRetries + 1,
-                    userId,
-                    action,
-                    resource,
-                    delayMs);
-
+                    attempt, _checkRetries + 1, userId, action, resource, delayMs);
                 await Task.Delay(delayMs);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex,
                     "Permit.io check failed for user={UserId} action={Action} resource={Resource}. Denying by default.",
-                    userId,
-                    action,
-                    resource);
+                    userId, action, resource);
                 return false;
             }
         }
 
         _logger.LogError(lastException,
             "Permit.io check exhausted retries for user={UserId} action={Action} resource={Resource}. Denying by default.",
-            userId,
-            action,
-            resource);
+            userId, action, resource);
         return false;
     }
 
@@ -129,4 +152,10 @@ public class PermitAuthorizationService : IPermitAuthorizationService
                || exception.Message.Contains("No such host is known", StringComparison.OrdinalIgnoreCase)
                || exception.Message.Contains("cloudpdp.api.permit.io", StringComparison.OrdinalIgnoreCase);
     }
+}
+
+internal sealed class PermitAllowedResponse
+{
+    [System.Text.Json.Serialization.JsonPropertyName("allow")]
+    public bool Allow { get; set; }
 }
