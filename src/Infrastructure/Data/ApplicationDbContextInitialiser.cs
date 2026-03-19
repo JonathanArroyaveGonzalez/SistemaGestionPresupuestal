@@ -1,10 +1,11 @@
-﻿using System.Runtime.InteropServices;
+using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Common.Models;
 using SAPFIAI.Domain.Constants;
-using SAPFIAI.Domain.Entities;
 using SAPFIAI.Infrastructure.Identity;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -15,11 +16,8 @@ public static class InitialiserExtensions
     public static async Task InitialiseDatabaseAsync(this WebApplication app)
     {
         using var scope = app.Services.CreateScope();
-
         var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextInitialiser>();
-
         await initialiser.InitialiseAsync();
-
         await initialiser.SeedAsync();
     }
 }
@@ -29,23 +27,28 @@ public class ApplicationDbContextInitialiser
     private readonly ILogger<ApplicationDbContextInitialiser> _logger;
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly RoleManager<IdentityRole> _roleManager;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly IConfiguration _configuration;
 
-    public ApplicationDbContextInitialiser(ILogger<ApplicationDbContextInitialiser> logger, ApplicationDbContext context, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
+    public ApplicationDbContextInitialiser(
+        ILogger<ApplicationDbContextInitialiser> logger,
+        ApplicationDbContext context,
+        UserManager<ApplicationUser> userManager,
+        IServiceProvider serviceProvider,
+        IConfiguration configuration)
     {
         _logger = logger;
         _context = context;
         _userManager = userManager;
-        _roleManager = roleManager;
+        _serviceProvider = serviceProvider;
+        _configuration = configuration;
     }
 
     public async Task InitialiseAsync()
     {
         try
         {
-            // Check if we can connect and if there are pending migrations
             var pendingMigrations = await _context.Database.GetPendingMigrationsAsync();
-            
             if (pendingMigrations.Any())
             {
                 _logger.LogInformation("Applying {Count} pending migrations...", pendingMigrations.Count());
@@ -58,7 +61,6 @@ public class ApplicationDbContextInitialiser
         }
         catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 2714)
         {
-            // Error 2714: Object already exists in database
             _logger.LogWarning("Database tables already exist. Skipping migration.");
         }
         catch (Exception ex)
@@ -83,55 +85,75 @@ public class ApplicationDbContextInitialiser
 
     public async Task TrySeedAsync()
     {
-        // Default roles
-        var administratorRole = new IdentityRole(Roles.Administrator);
-        var userRole = new IdentityRole("User");
-        var managerRole = new IdentityRole("Manager");
+        var adminEmail = _configuration["BootstrapAdmin:Email"] ?? "administrator@localhost";
+        var adminPassword = _configuration["BootstrapAdmin:Password"] ?? "Administrator1!";
+        var adminUserName = _configuration["BootstrapAdmin:UserName"] ?? adminEmail;
+        var adminPhoneNumber = _configuration["BootstrapAdmin:PhoneNumber"];
+        var skipPermitBootstrap = _configuration.GetValue<bool>("SkipPermitBootstrap");
 
-        if (_roleManager.Roles.All(r => r.Name != administratorRole.Name))
-        {
-            await _roleManager.CreateAsync(administratorRole);
-        }
+        var administrator = await _userManager.FindByEmailAsync(adminEmail);
 
-        if (_roleManager.Roles.All(r => r.Name != userRole.Name))
+        if (administrator == null)
         {
-            await _roleManager.CreateAsync(userRole);
-        }
-
-        if (_roleManager.Roles.All(r => r.Name != managerRole.Name))
-        {
-            await _roleManager.CreateAsync(managerRole);
-        }
-
-        // Default permissions
-        if (!_context.Permissions.Any())
-        {
-            var permissions = new List<Permission>
+            administrator = new ApplicationUser
             {
-                new() { Name = "users.read", Description = "Ver usuarios", Module = "Users" },
-                new() { Name = "users.create", Description = "Crear usuarios", Module = "Users" },
-                new() { Name = "users.update", Description = "Actualizar usuarios", Module = "Users" },
-                new() { Name = "users.delete", Description = "Eliminar usuarios", Module = "Users" },
-                new() { Name = "roles.read", Description = "Ver roles", Module = "Roles" },
-                new() { Name = "roles.manage", Description = "Gestionar roles", Module = "Roles" },
-                new() { Name = "audit.read", Description = "Ver auditoría", Module = "Audit" },
-                new() { Name = "system.admin", Description = "Administración del sistema", Module = "System" }
+                UserName = adminUserName,
+                Email = adminEmail,
+                PhoneNumber = adminPhoneNumber
             };
 
-            _context.Permissions.AddRange(permissions);
-            await _context.SaveChangesAsync();
+            var createResult = await _userManager.CreateAsync(administrator, adminPassword);
+            if (!createResult.Succeeded)
+            {
+                var error = string.Join("; ", createResult.Errors.Select(error => error.Description));
+                throw new InvalidOperationException($"Could not create bootstrap admin user: {error}");
+            }
         }
 
-        // Default users
-        var administrator = new ApplicationUser { UserName = "administrator@localhost", Email = "administrator@localhost" };
-
-        if (_userManager.Users.All(u => u.UserName != administrator.UserName))
+        if (skipPermitBootstrap)
         {
-            await _userManager.CreateAsync(administrator, "Administrator1!");
-            if (!string.IsNullOrWhiteSpace(administratorRole.Name))
+            _logger.LogWarning("SkipPermitBootstrap is enabled. Permit.io bootstrap was skipped for the initial administrator.");
+            return;
+        }
+
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var permitProvisioning = scope.ServiceProvider.GetRequiredService<IPermitProvisioningService>();
+
+            await permitProvisioning.EnsureAuthorizationModelAsync();
+            await permitProvisioning.SyncUserAsync(new PermitUserSyncRequest
             {
-                await _userManager.AddToRolesAsync(administrator, new [] { administratorRole.Name });
+                UserId = administrator.Id,
+                Email = administrator.Email ?? adminEmail,
+                UserName = administrator.UserName,
+                PhoneNumber = administrator.PhoneNumber
+            });
+            await permitProvisioning.AssignRoleAsync(administrator.Id, PermitConstants.Roles.Admin);
+
+            var permitAuthorization = scope.ServiceProvider.GetRequiredService<IPermitAuthorizationService>();
+            var adminCanCreateUsers = await permitAuthorization.IsAllowedAsync(
+                administrator.Id,
+                PermitConstants.Actions.Create,
+                PermitConstants.Resources.ManageUsers);
+
+            if (!adminCanCreateUsers)
+            {
+                _logger.LogWarning("Bootstrap admin could not be verified in Permit.io (manage_users:create denied). " +
+                                   "The authorization model may not be fully provisioned yet.");
             }
+            else
+            {
+                _logger.LogInformation("Permit.io bootstrap completed. Admin has manage_users:create.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Permit.io bootstrap failed ({ExceptionType}: {Message}). " +
+                "The application will start, but the authorization model may not be fully provisioned. " +
+                "Re-run the application to retry the bootstrap.",
+                ex.GetType().Name, ex.Message);
         }
     }
 }

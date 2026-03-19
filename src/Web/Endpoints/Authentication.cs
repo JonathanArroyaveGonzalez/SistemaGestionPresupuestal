@@ -5,7 +5,6 @@ using SAPFIAI.Application.Users.Commands.ForgotPassword;
 using SAPFIAI.Application.Users.Commands.Login;
 using SAPFIAI.Application.Users.Commands.Logout;
 using SAPFIAI.Application.Users.Commands.RefreshToken;
-using SAPFIAI.Application.Users.Commands.Register;
 using SAPFIAI.Application.Users.Commands.ResetPassword;
 using SAPFIAI.Application.Users.Commands.RevokeToken;
 using SAPFIAI.Application.Users.Commands.ValidateTwoFactor;
@@ -22,14 +21,6 @@ public class Authentication : EndpointGroupBase
     {
         var group = app.MapGroup(this)
             .WithName("Authentication");
-
-        group.MapPost("/register", Register)
-            .WithName("Register")
-            .WithSummary("Registrar usuario")
-            .WithDescription("Crea una nueva cuenta de usuario. Requiere email, password y confirmación.")
-            .Produces<RegisterResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .AllowAnonymous();
 
         group.MapPost("/login", Login)
             .WithName("Login")
@@ -110,20 +101,6 @@ public class Authentication : EndpointGroupBase
             .Produces<IEnumerable<AuditLogDto>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
             .RequireAuthorization();
-    }
-
-    private static async Task<RegisterResponse> Register(
-        [FromBody] RegisterCommand command,
-        IMediator mediator,
-        HttpContext httpContext)
-    {
-        command = command with
-        {
-            IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
-            UserAgent = httpContext.Request.Headers.UserAgent.ToString()
-        };
-
-        return await mediator.Send(command);
     }
 
     private static async Task<LoginResponse> Login(

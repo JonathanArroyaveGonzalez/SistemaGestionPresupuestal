@@ -10,31 +10,24 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
     private readonly ITwoFactorService _twoFactorService;
     private readonly IAuditLogService _auditLogService;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
-    private readonly IIdentityService _identityService;
     private readonly IRefreshTokenService _refreshTokenService;
-    private readonly IPermissionService _permissionService;
 
     public ValidateTwoFactorCommandHandler(
         IAuthenticationOperations authOperations,
         ITwoFactorService twoFactorService,
         IAuditLogService auditLogService,
         IJwtTokenGenerator jwtTokenGenerator,
-        IIdentityService identityService,
-        IRefreshTokenService refreshTokenService,
-        IPermissionService permissionService)
+        IRefreshTokenService refreshTokenService)
     {
         _authOperations = authOperations;
         _twoFactorService = twoFactorService;
         _auditLogService = auditLogService;
         _jwtTokenGenerator = jwtTokenGenerator;
-        _identityService = identityService;
         _refreshTokenService = refreshTokenService;
-        _permissionService = permissionService;
     }
 
     public async Task<ValidateTwoFactorResponse> Handle(ValidateTwoFactorCommand request, CancellationToken cancellationToken)
     {
-        // Validar que el token existe y requiere verificación 2FA
         if (string.IsNullOrEmpty(request.Token))
         {
             return new ValidateTwoFactorResponse
@@ -45,7 +38,6 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
             };
         }
 
-        // Verificar que el token tiene pendiente la verificación 2FA
         if (!_jwtTokenGenerator.RequiresTwoFactorVerification(request.Token))
         {
             return new ValidateTwoFactorResponse
@@ -56,7 +48,6 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
             };
         }
 
-        // Extraer userId del token
         var userId = _jwtTokenGenerator.GetUserIdFromToken(request.Token);
         if (string.IsNullOrEmpty(userId))
         {
@@ -68,7 +59,6 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
             };
         }
 
-        // Obtener usuario
         var user = await _authOperations.GetUserByIdAsync(userId);
         if (user == null)
         {
@@ -88,7 +78,6 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
             };
         }
 
-        // Validar código 2FA
         var isValid = await _twoFactorService.ValidateTwoFactorCodeAsync(userId, request.Code);
         if (!isValid)
         {
@@ -108,16 +97,11 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
             };
         }
 
-        // Limpiar código 2FA usado
         await _twoFactorService.ClearTwoFactorCodeAsync(userId);
 
-        // Generar nuevo JWT sin flag de 2FA pendiente
-        var userRoles = await _identityService.GetUserRolesAsync(userId);
-        var userPermissions = await _permissionService.GetUserPermissionsAsync(userId);
-        var newToken = _jwtTokenGenerator.GenerateToken(userId, user.Email ?? string.Empty, userRoles, userPermissions, requiresTwoFactorVerification: false);
+        var newToken = _jwtTokenGenerator.GenerateToken(userId, user.Email ?? string.Empty, requiresTwoFactorVerification: false);
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId, request.IpAddress ?? "UNKNOWN");
 
-        // Actualizar datos de login
         await _authOperations.UpdateLastLoginAsync(userId, request.IpAddress);
 
         await _auditLogService.LogActionAsync(

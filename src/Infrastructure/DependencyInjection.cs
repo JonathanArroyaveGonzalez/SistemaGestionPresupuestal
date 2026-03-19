@@ -1,5 +1,4 @@
 using SAPFIAI.Application.Common.Interfaces;
-using SAPFIAI.Domain.Constants;
 using SAPFIAI.Infrastructure.Data;
 using SAPFIAI.Infrastructure.Data.Interceptors;
 using SAPFIAI.Infrastructure.Identity;
@@ -61,7 +60,6 @@ public static class DependencyInjection
 
         services
             .AddIdentityCore<ApplicationUser>()
-            .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<ApplicationDbContext>();
 
         services.AddSingleton(TimeProvider.System);
@@ -79,13 +77,7 @@ public static class DependencyInjection
         // Permit.io RBAC
         services.AddSingleton<PermitAuthorizationService>();
         services.AddSingleton<IPermitAuthorizationService>(sp => sp.GetRequiredService<PermitAuthorizationService>());
-        services.AddScoped<IPermitSetupService, PermitSetupService>();
-
-        services.AddAuthorization(options =>
-        {
-            options.AddPolicy(Policies.CanPurge, policy => policy.RequireRole(Roles.Administrator));
-            options.AddPolicy(Policies.RequireAdministrator, policy => policy.RequireRole(Roles.Administrator));
-        });
+        services.AddScoped<IPermitProvisioningService, PermitProvisioningService>();
 
         return services;
     }

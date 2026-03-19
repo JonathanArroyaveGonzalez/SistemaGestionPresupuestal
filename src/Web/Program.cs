@@ -60,25 +60,6 @@ try
         await initialiser.SeedAsync();       // seed — corre en todos los entornos
     }
 
-    // Configurar modelo de permisos en Permit.io (idempotente)
-    var skipPermitSetup = string.Equals(Environment.GetEnvironmentVariable("SKIP_PERMIT_SETUP"), "true", StringComparison.OrdinalIgnoreCase)
-        || Environment.GetEnvironmentVariable("SKIP_PERMIT_SETUP") == "1";
-
-    if (!skipPermitSetup)
-    {
-        try
-        {
-            using var scope = app.Services.CreateScope();
-            var permitSetup = scope.ServiceProvider.GetRequiredService<IPermitSetupService>();
-            await permitSetup.SetupAsync();
-        }
-        catch (Exception ex)
-        {
-            var logger = app.Services.GetRequiredService<ILogger<Program>>();
-            logger.LogWarning(ex, "Permit.io setup failed. The app will start without permission sync.");
-        }
-    }
-
     app.MapOpenApi();
     app.MapScalarApiReference(options =>
     {
@@ -93,6 +74,17 @@ try
 
     // CORS: política correcta según entorno
     app.UseCors(app.Environment.IsDevelopment() ? "DevelopmentCors" : "ProductionCors");
+
+    // Bootstrap Permit.io — crea recursos/roles/políticas si no existen
+    var skipPermitBootstrap = builder.Configuration.GetValue<bool>("SkipPermitBootstrap")
+        || string.Equals(Environment.GetEnvironmentVariable("SKIPPERMITBOOTSTRAP"), "true", StringComparison.OrdinalIgnoreCase);
+
+    if (!skipPermitBootstrap)
+    {
+        using var permitScope = app.Services.CreateScope();
+        var permitProvisioning = permitScope.ServiceProvider.GetRequiredService<IPermitProvisioningService>();
+        await permitProvisioning.EnsureAuthorizationModelAsync();
+    }
 
     app.UseAuthentication();
     app.UseAuthorization();

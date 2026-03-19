@@ -10,10 +10,9 @@ public interface IJwtTokenGenerator
     /// </summary>
     /// <param name="userId">ID del usuario</param>
     /// <param name="email">Email del usuario</param>
-    /// <param name="roles">Roles del usuario (opcional)</param>
     /// <param name="requiresTwoFactorVerification">Indica si el token requiere verificaci�n 2FA</param>
     /// <returns>Token JWT como string</returns>
-    string GenerateToken(string userId, string email, IEnumerable<string>? roles = null, IEnumerable<string>? permissions = null, bool requiresTwoFactorVerification = false);
+    string GenerateToken(string userId, string email, bool requiresTwoFactorVerification = false);
 
     /// <summary>
     /// Valida si un token tiene pendiente la verificaci�n 2FA
