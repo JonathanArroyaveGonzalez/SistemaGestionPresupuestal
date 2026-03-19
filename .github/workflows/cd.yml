@@ -21,8 +21,11 @@ jobs:
       - name: Test with .NET
         run: dotnet test SAPFIAI.sln --configuration Release --no-build
 
+      - name: Restore Web publish runtime assets
+        run: dotnet restore src/Web/Web.csproj --runtime win-x86
+
       - name: Publish
-        run: dotnet publish src/Web/Web.csproj --configuration Release --no-build --output ./publish --runtime win-x86
+        run: dotnet publish src/Web/Web.csproj --configuration Release --runtime win-x86 --self-contained false --output ./publish --no-restore
 
       - name: Deploy to MonsterASP.NET via WebDeploy
         uses: rasmusbuchholdt/simply-web-deploy@2.1.0
