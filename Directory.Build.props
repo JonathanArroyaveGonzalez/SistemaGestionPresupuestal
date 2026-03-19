@@ -1,12 +1,32 @@
 ﻿<Project>
   <PropertyGroup>
+    <!-- SDK y lenguaje -->
     <TargetFramework>net10.0</TargetFramework>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Calidad y análisis -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisMode>All</AnalysisMode>
+
+    <!-- Metadatos del paquete / assembly -->
+    <Authors>CI2DT2 </Authors>
+    <Company>CENTRO DE INVESTIGACIÓN, INNOVACIÓN, DESARROLLO Y TRANSFERENCIA TECNOLÓGICA</Company>
+    <Copyright>Copyright © $([System.DateTime]::Now.Year)</Copyright>
+
+    <!-- Reproducibilidad -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
-  <!-- AutoMapper GHSA-rvv3-g6hj-g44x: falso positivo en GitHub Advisory DB -->
+
+  <!-- Paquetes de análisis compartidos para todos los proyectos -->
   <ItemGroup>
-    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rvv3-g6hj-g44x" />
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>

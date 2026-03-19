@@ -1,0 +1,31 @@
+# Formato de commits — Conventional Commits
+# Tipo(scope): descripción corta en imperativo
+#
+# Tipos permitidos:
+#   feat     – nueva funcionalidad
+#   fix      – corrección de bug
+#   docs     – solo documentación
+#   style    – formato, espacios (sin cambio de lógica)
+#   refactor – refactorización sin feat ni fix
+#   perf     – mejora de rendimiento
+#   test     – agregar o corregir tests
+#   build    – cambios en build system o dependencias
+#   ci       – cambios en pipelines de CI/CD
+#   chore    – tareas de mantenimiento
+#   revert   – revertir un commit anterior
+#
+# Ejemplos:
+#   feat(auth): agregar autenticación JWT
+#   fix(users): corregir null reference en GetById
+#   docs(readme): actualizar instrucciones de instalación
+#   ci(github-actions): agregar step de cobertura
+#
+# Si el commit incluye un breaking change, agrega ! después del tipo:
+#   feat!: cambiar firma del endpoint de usuarios
+#
+# Cuerpo (opcional) — separa con línea en blanco:
+# Explica el POR QUÉ del cambio, no el qué.
+#
+# Footer (opcional):
+#   Closes #123
+#   BREAKING CHANGE: descripción del cambio
