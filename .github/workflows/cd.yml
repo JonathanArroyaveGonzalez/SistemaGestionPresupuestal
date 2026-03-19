@@ -13,16 +13,16 @@ jobs:
           dotnet-version: 10.0
           
       - name: Install dependencies
-        run: dotnet restore
+        run: dotnet restore SAPFIAI.sln
         
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build SAPFIAI.sln --configuration Release --no-restore
+
+      - name: Test with .NET
+        run: dotnet test SAPFIAI.sln --configuration Release --no-build
 
       - name: Publish
-        run: dotnet publish --configuration Release --output ./publish --runtime win-x86 
-        
-      - name: Test with .NET
-        run: dotnet test
+        run: dotnet publish src/Web/Web.csproj --configuration Release --no-build --output ./publish --runtime win-x86
 
       - name: Deploy to MonsterASP.NET via WebDeploy
         uses: rasmusbuchholdt/simply-web-deploy@2.1.0
