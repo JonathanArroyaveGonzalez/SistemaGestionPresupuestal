@@ -18,28 +18,28 @@ public class PermitManagement : EndpointGroupBase
             .WithName("GetPermitRoles")
             .WithSummary("Listar roles en Permit.io")
             .Produces<IEnumerable<PermitRoleDto>>(StatusCodes.Status200OK)
-            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.Read);
+            .RequirePermit(PermitConstants.Resources.PermitManagement, PermitConstants.Actions.Read);
 
         group.MapPost("/roles", CreateRole)
             .WithName("CreatePermitRole")
             .WithSummary("Crear un rol en Permit.io")
             .Produces<string>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
-            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.Create);
+            .RequirePermit(PermitConstants.Resources.PermitManagement, PermitConstants.Actions.Create);
 
         // Resources
         group.MapGet("/resources", GetResources)
             .WithName("GetPermitResources")
             .WithSummary("Listar recursos en Permit.io")
             .Produces<IEnumerable<PermitResourceDto>>(StatusCodes.Status200OK)
-            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.Read);
+            .RequirePermit(PermitConstants.Resources.PermitManagement, PermitConstants.Actions.Read);
 
         group.MapPost("/resources", CreateResource)
             .WithName("CreatePermitResource")
             .WithSummary("Crear un recurso con acciones en Permit.io")
             .Produces<string>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
-            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.Create);
+            .RequirePermit(PermitConstants.Resources.PermitManagement, PermitConstants.Actions.Create);
 
         // Permissions
         group.MapPut("/roles/{roleKey}/permissions", AssignPermissions)
@@ -47,20 +47,20 @@ public class PermitManagement : EndpointGroupBase
             .WithSummary("Asignar permisos a un rol (formato: recurso:accion)")
             .Produces<string>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
-            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.AssignPermission);
+            .RequirePermit(PermitConstants.Resources.PermitManagement, PermitConstants.Actions.AssignPermission);
 
         // User role assignment
         group.MapPost("/users/{userId}/roles/{roleKey}", AssignUserRole)
             .WithName("AssignRoleToUser")
             .WithSummary("Asignar un rol a un usuario en Permit.io")
             .Produces<string>(StatusCodes.Status200OK)
-            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.AssignRole);
+            .RequirePermit(PermitConstants.Resources.PermitManagement, PermitConstants.Actions.AssignRole);
 
         group.MapDelete("/users/{userId}/roles/{roleKey}", UnassignUserRole)
             .WithName("UnassignRoleFromUser")
             .WithSummary("Quitar un rol a un usuario en Permit.io")
             .Produces<string>(StatusCodes.Status200OK)
-            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.RemoveRole);
+            .RequirePermit(PermitConstants.Resources.PermitManagement, PermitConstants.Actions.RemoveRole);
     }
 
     private static async Task<IResult> GetRoles(IPermitProvisioningService permit, CancellationToken ct)

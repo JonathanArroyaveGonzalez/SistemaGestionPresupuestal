@@ -5,6 +5,7 @@ public static class PermitConstants
     public static class Resources
     {
         public const string ManageUsers = "manage_users";
+        public const string PermitManagement = "permit_management";
     }
 
     public static class Actions
@@ -50,5 +51,14 @@ public static class PermitConstants
         Actions.RemoveRole,
         Actions.AssignPermission,
         Actions.RemovePermission
+    ];
+
+    public static readonly string[] PermitManagementActions =
+    [
+        Actions.Read,
+        Actions.Create,
+        Actions.AssignPermission,
+        Actions.AssignRole,
+        Actions.RemoveRole
     ];
 }
