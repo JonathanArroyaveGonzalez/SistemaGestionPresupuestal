@@ -5,44 +5,39 @@ using Scalar.AspNetCore;
 
 try
 {
-    var aspNetCoreEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-    var isDevelopment = string.Equals(aspNetCoreEnvironment, "Development", StringComparison.OrdinalIgnoreCase);
-
-    // In production, rely on host-level environment variables.
-    // .env is intended only for local development and should not override hosting settings.
-    if (isDevelopment)
+    // Load .env file unconditionally so ASPNETCORE_ENVIRONMENT and all secrets
+    // are available before WebApplication.CreateBuilder reads configuration.
+    // Variables already set in the process (e.g. from hosting panel) are never overwritten.
+    var possibleEnvPaths = new[]
     {
-        var possibleEnvPaths = new[]
-        {
-            Path.Combine(Directory.GetCurrentDirectory(), ".env"),
-            Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", ".env")
-        };
+        Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+        Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", ".env")
+    };
 
-        foreach (var envPath in possibleEnvPaths)
+    foreach (var envPath in possibleEnvPaths)
+    {
+        if (File.Exists(envPath))
         {
-            if (File.Exists(envPath))
+            Console.WriteLine($"Cargando variables de entorno desde: {Path.GetFullPath(envPath)}");
+            foreach (var line in File.ReadAllLines(envPath))
             {
-                Console.WriteLine($"Cargando variables de entorno desde: {Path.GetFullPath(envPath)}");
-                foreach (var line in File.ReadAllLines(envPath))
-                {
-                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
-                        continue;
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
+                    continue;
 
-                    var parts = line.Split('=', 2);
-                    if (parts.Length != 2)
-                        continue;
+                var parts = line.Split('=', 2);
+                if (parts.Length != 2)
+                    continue;
 
-                    var key = parts[0].Trim();
-                    var value = parts[1].Trim();
+                var key = parts[0].Trim();
+                var value = parts[1].Trim();
 
-                    // Never override an already-defined environment variable.
-                    if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key)))
-                        Environment.SetEnvironmentVariable(key, value);
-                }
-                break;
+                // Never override a variable already defined in the host environment.
+                if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key)))
+                    Environment.SetEnvironmentVariable(key, value);
             }
+            break;
         }
     }
 
@@ -84,22 +79,19 @@ try
     });
 
     app.UseHealthChecks("/health");
-    app.UseHttpsRedirection();
+
+    // UseHttpsRedirection causes redirect loops behind IIS reverse proxy.
+    // HTTPS termination is handled by IIS — only redirect in direct Kestrel scenarios.
+    if (app.Environment.IsDevelopment())
+        app.UseHttpsRedirection();
+
     app.UseStaticFiles();
 
     // CORS: política correcta según entorno
     app.UseCors(app.Environment.IsDevelopment() ? "DevelopmentCors" : "ProductionCors");
 
-    // Bootstrap Permit.io — crea recursos/roles/políticas si no existen
-    var skipPermitBootstrap = builder.Configuration.GetValue<bool>("SkipPermitBootstrap")
-        || string.Equals(Environment.GetEnvironmentVariable("SKIPPERMITBOOTSTRAP"), "true", StringComparison.OrdinalIgnoreCase);
-
-    if (!skipPermitBootstrap)
-    {
-        using var permitScope = app.Services.CreateScope();
-        var permitProvisioning = permitScope.ServiceProvider.GetRequiredService<IPermitProvisioningService>();
-        await permitProvisioning.EnsureAuthorizationModelAsync();
-    }
+    // Bootstrap Permit.io — se ejecuta dentro de SeedAsync junto con la sincronizacion del admin.
+    // No se llama aqui para evitar doble ejecucion.
 
     app.UseAuthentication();
     app.UseAuthorization();

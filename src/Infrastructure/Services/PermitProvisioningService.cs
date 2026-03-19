@@ -17,6 +17,8 @@ public class PermitProvisioningService : IPermitProvisioningService
     {
         [PermitConstants.Roles.Admin] = PermitConstants.ManageUsersActions
             .Select(action => $"{PermitConstants.Resources.ManageUsers}:{action}")
+            .Concat(PermitConstants.PermitManagementActions
+                .Select(action => $"{PermitConstants.Resources.PermitManagement}:{action}"))
             .ToArray(),
         [PermitConstants.Roles.Manager] =
         [
@@ -44,6 +46,7 @@ public class PermitProvisioningService : IPermitProvisioningService
 
         await EnsureTenantAsync();
         await EnsureResourceAsync(PermitConstants.Resources.ManageUsers, PermitConstants.ManageUsersActions);
+        await EnsureResourceAsync(PermitConstants.Resources.PermitManagement, PermitConstants.PermitManagementActions);
 
         foreach (var (roleKey, permissions) in RolePermissions)
         {
@@ -130,24 +133,16 @@ public class PermitProvisioningService : IPermitProvisioningService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var paged = await _permit.GetSchemaAsync<PermitPagedResult<PermitRoleRead>>("roles", cancellationToken);
-        var result = new List<PermitRoleDto>();
-        if (paged?.Data != null)
-            foreach (var r in paged.Data)
-                result.Add(new PermitRoleDto(r.Key, r.Name ?? r.Key, r.Permissions ?? []));
-        return result;
+        var roles = await _permit.GetSchemaAsync<List<PermitRoleRead>>("roles", cancellationToken);
+        return roles?.Select(r => new PermitRoleDto(r.Key, r.Name ?? r.Key, r.Permissions ?? [])) ?? [];
     }
 
     public async Task<IEnumerable<PermitResourceDto>> GetResourcesAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var paged = await _permit.GetSchemaAsync<PermitPagedResult<PermitResourceRead>>("resources", cancellationToken);
-        var result = new List<PermitResourceDto>();
-        if (paged?.Data != null)
-            foreach (var r in paged.Data)
-                result.Add(new PermitResourceDto(r.Key, r.Name ?? r.Key, r.Actions?.Keys.ToList() ?? []));
-        return result;
+        var resources = await _permit.GetSchemaAsync<List<PermitResourceRead>>("resources", cancellationToken);
+        return resources?.Select(r => new PermitResourceDto(r.Key, r.Name ?? r.Key, r.Actions?.Keys.ToList() ?? [])) ?? [];
     }
 
     // ── private helpers ──────────────────────────────────────────────────────
@@ -207,14 +202,6 @@ public class PermitProvisioningService : IPermitProvisioningService
         return domain.Contains('.') && !domain.EndsWith('.');
     }
 }
-
-// REST API response shapes
-internal sealed class PermitPagedResult<T>
-{
-    [System.Text.Json.Serialization.JsonPropertyName("data")]
-    public List<T>? Data { get; set; }
-}
-
 internal sealed class PermitRoleRead
 {
     [System.Text.Json.Serialization.JsonPropertyName("key")]

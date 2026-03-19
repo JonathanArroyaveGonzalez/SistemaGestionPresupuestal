@@ -419,6 +419,7 @@ FodyWeavers.xsd
 
 # Local publish output
 publish/
+publish-output/
 
 # Database files
 *.db
@@ -522,5 +523,7 @@ docsPublish/
 publish-template.ps1
 publish-template.sh
 Nuget.config
+deploy-monsterasp.ps1
+
 
     
