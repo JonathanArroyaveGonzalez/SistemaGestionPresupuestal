@@ -5,29 +5,44 @@ using Scalar.AspNetCore;
 
 try
 {
-    var possibleEnvPaths = new[]
-    {
-        Path.Combine(Directory.GetCurrentDirectory(), ".env"),
-        Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", ".env")
-    };
+    var aspNetCoreEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+    var isDevelopment = string.Equals(aspNetCoreEnvironment, "Development", StringComparison.OrdinalIgnoreCase);
 
-    foreach (var envPath in possibleEnvPaths)
+    // In production, rely on host-level environment variables.
+    // .env is intended only for local development and should not override hosting settings.
+    if (isDevelopment)
     {
-        if (File.Exists(envPath))
+        var possibleEnvPaths = new[]
         {
-            Console.WriteLine($"Cargando variables de entorno desde: {Path.GetFullPath(envPath)}");
-            foreach (var line in File.ReadAllLines(envPath))
-            {
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
-                    continue;
+            Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "..", ".env")
+        };
 
-                var parts = line.Split('=', 2);
-                if (parts.Length == 2)
-                    Environment.SetEnvironmentVariable(parts[0].Trim(), parts[1].Trim());
+        foreach (var envPath in possibleEnvPaths)
+        {
+            if (File.Exists(envPath))
+            {
+                Console.WriteLine($"Cargando variables de entorno desde: {Path.GetFullPath(envPath)}");
+                foreach (var line in File.ReadAllLines(envPath))
+                {
+                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
+                        continue;
+
+                    var parts = line.Split('=', 2);
+                    if (parts.Length != 2)
+                        continue;
+
+                    var key = parts[0].Trim();
+                    var value = parts[1].Trim();
+
+                    // Never override an already-defined environment variable.
+                    if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key)))
+                        Environment.SetEnvironmentVariable(key, value);
+                }
+                break;
             }
-            break;
         }
     }
 
