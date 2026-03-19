@@ -521,4 +521,6 @@ docsPublish/
 #Scripts de publicacion PowerShell
 publish-template.ps1
 publish-template.sh
+Nuget.config
+
     
