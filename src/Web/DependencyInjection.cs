@@ -84,7 +84,8 @@ public static class DependencyInjection
             {
                 var rawOrigins = configuration["AllowedOrigins"] ?? string.Empty;
                 var origins = rawOrigins
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(o => o.Trim().TrimEnd('/'))
                     .Where(o => !string.IsNullOrWhiteSpace(o))
                     .ToArray();
 
