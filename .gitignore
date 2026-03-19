@@ -524,6 +524,6 @@ publish-template.ps1
 publish-template.sh
 Nuget.config
 deploy-monsterasp.ps1
-
+src/Web/Properties/PublishProfiles/
 
     
