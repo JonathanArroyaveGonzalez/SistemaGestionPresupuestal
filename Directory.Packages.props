@@ -23,6 +23,7 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.5.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
     <PackageVersion Include="Moq" Version="4.20.69" />
