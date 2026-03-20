@@ -7,7 +7,7 @@ on:
 
 jobs:
   build_and_deploy:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -25,11 +25,8 @@ jobs:
       - name: Test
         run: dotnet test SAPFIAI.sln --configuration Release --no-build
 
-      - name: Restore Web runtime assets
-        run: dotnet restore src/Web/Web.csproj --runtime win-x86
-
       - name: Publish
-        run: dotnet publish src/Web/Web.csproj --configuration Release --runtime win-x86 --self-contained false --output ./publish --no-restore
+        run: dotnet publish src/Web/Web.csproj --configuration Release --runtime win-x86 --self-contained false --output ./publish
           
       - name: Deploy via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
