@@ -25,8 +25,11 @@ jobs:
       - name: Test
         run: dotnet test SAPFIAI.sln --configuration Release --no-build
 
+      - name: Restore Web runtime assets
+        run: dotnet restore src/Web/Web.csproj --runtime win-x64
+
       - name: Publish
-        run: dotnet publish src/Web/Web.csproj --configuration Release --runtime win-x86 --self-contained false --output ./publish --no-restore
+        run: dotnet publish src/Web/Web.csproj --configuration Release --runtime win-x64 --self-contained false --output ./publish --no-restore
 
       - name: Deploy via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
