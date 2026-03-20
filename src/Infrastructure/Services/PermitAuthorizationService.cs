@@ -29,15 +29,19 @@ public class PermitAuthorizationService : IPermitAuthorizationService
     {
         _logger = logger;
 
-        // Resolve API key: try explicit single key first, then environment-suffixed variants.
-        // This avoids depending on ASPNETCORE_ENVIRONMENT which launchSettings.json can override.
-        var apiKey = GetConfig(configuration, "Permitio:EnvironmentKey")
+        // Resolve API key by ASPNETCORE_ENVIRONMENT suffix first, then fall back to generic key.
+        // ASPNETCORE_ENVIRONMENT is read directly from the environment variable (not IConfiguration)
+        // because launchSettings.json injects it before the process starts and it is always reliable.
+        var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        var envSuffix = aspnetEnv.ToUpperInvariant(); // e.g. "DEVELOPMENT", "PRODUCTION"
+
+        var apiKey = GetConfig(configuration, $"Permitio:EnvironmentKey_{envSuffix}")
+            ?? GetConfig(configuration, $"PermitIo:EnvironmentKey_{envSuffix}")
+            ?? GetConfig(configuration, "Permitio:EnvironmentKey")
             ?? GetConfig(configuration, "PermitIo:EnvironmentKey")
-            ?? GetConfig(configuration, "Permitio:EnvironmentKey_PRODUCTION")
-            ?? GetConfig(configuration, "PermitIo:EnvironmentKey_PRODUCTION")
-            ?? GetConfig(configuration, "Permitio:EnvironmentKey_DEVELOPMENT")
-            ?? GetConfig(configuration, "PermitIo:EnvironmentKey_DEVELOPMENT")
-            ?? throw new InvalidOperationException("Permit.io key not configured. Set 'PERMITIO__ENVIRONMENTKEY' env var.");
+            ?? throw new InvalidOperationException(
+                $"Permit.io key not configured for environment '{aspnetEnv}'. " +
+                $"Set 'PERMITIO__ENVIRONMENTKEY_{envSuffix}' env var.");
 
         var pdpUrl = GetConfig(configuration, "Permitio:PdpUrl")
             ?? GetConfig(configuration, "PermitIo:PdpUrl")
@@ -47,19 +51,23 @@ public class PermitAuthorizationService : IPermitAuthorizationService
             ?? GetConfig(configuration, "PermitIo:ProjectId")
             ?? throw new InvalidOperationException("Permit.io ProjectId not configured. Set 'PERMITIO__PROJECTID' env var.");
 
-        EnvironmentId = GetConfig(configuration, "Permitio:EnvironmentId")
-            ?? GetConfig(configuration, "PermitIo:EnvironmentId")
-            ?? GetConfig(configuration, "Permitio:EnvironmentId_PRODUCTION")
-            ?? GetConfig(configuration, "PermitIo:EnvironmentId_PRODUCTION")
-            ?? GetConfig(configuration, "Permitio:EnvironmentId_DEVELOPMENT")
-            ?? GetConfig(configuration, "PermitIo:EnvironmentId_DEVELOPMENT")
-            ?? throw new InvalidOperationException("Permit.io EnvironmentId not configured. Set 'PERMITIO__ENVIRONMENTID' env var.");
+        // Derive EnvironmentId from ASPNETCORE_ENVIRONMENT if not explicitly set.
+        // Development -> "dev", anything else (Production, Staging) -> lowercase of the env name.
+        var explicitEnvId = GetConfig(configuration, "Permitio:EnvironmentId")
+            ?? GetConfig(configuration, "PermitIo:EnvironmentId");
+
+        EnvironmentId = explicitEnvId ?? aspnetEnv switch
+        {
+            "Development" => "dev",
+            _ => aspnetEnv.ToLowerInvariant()
+        };
 
         _checkRetries = Math.Max(0, configuration.GetValue<int?>("Permitio:CheckRetries") ?? 3);
         _initialBackoffMs = Math.Max(100, configuration.GetValue<int?>("Permitio:CheckInitialBackoffMs") ?? 250);
 
         _apiKey = apiKey;
-        _logger.LogInformation("Permit.io iniciado — project: {Proj}, environment: {EnvId}", ProjectId, EnvironmentId);
+        _logger.LogInformation("Permit.io iniciado — project: {Proj}, environment: {EnvId}, aspnet-env: {AspNetEnv}",
+            ProjectId, EnvironmentId, aspnetEnv);
         _permit = new Permit(apiKey, pdpUrl);
 
         _http = new HttpClient { BaseAddress = new Uri("https://api.permit.io") };
@@ -140,8 +148,13 @@ public class PermitAuthorizationService : IPermitAuthorizationService
         return false;
     }
 
-    private static string? GetConfig(IConfiguration cfg, string key) =>
-        string.IsNullOrWhiteSpace(cfg[key]) ? null : cfg[key];
+    private static string? GetConfig(IConfiguration cfg, string key)
+    {
+        var value = cfg[key];
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (value.StartsWith("CHANGE-ME", StringComparison.OrdinalIgnoreCase)) return null;
+        return value;
+    }
 
     private static bool IsTransient(Exception exception)
     {

@@ -33,8 +33,13 @@ try
                 var key = parts[0].Trim();
                 var value = parts[1].Trim();
 
-                // Never override a variable already defined in the host environment.
-                if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key)))
+                // ASPNETCORE_ENVIRONMENT defined in .env always wins — it is the single source
+                // of truth for environment selection. launchSettings.json sets it before startup
+                // but .env must be able to override it so switching environments only requires
+                // editing .env.
+                // All other variables respect the host environment (hosting panel variables win).
+                var alreadySet = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key));
+                if (!alreadySet || key == "ASPNETCORE_ENVIRONMENT")
                     Environment.SetEnvironmentVariable(key, value);
             }
             break;
