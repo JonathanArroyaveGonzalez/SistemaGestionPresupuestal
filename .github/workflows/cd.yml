@@ -1,5 +1,9 @@
 name: Build, publish and deploy to MonsterASP.NET
-on: [push]
+
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   build_and_deploy:
@@ -11,26 +15,26 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0
-          
-      - name: Install dependencies
+
+      - name: Restore
         run: dotnet restore SAPFIAI.sln
-        
+
       - name: Build
         run: dotnet build SAPFIAI.sln --configuration Release --no-restore
 
-      - name: Test with .NET
+      - name: Test
         run: dotnet test SAPFIAI.sln --configuration Release --no-build
-
-      - name: Restore Web publish runtime assets
-        run: dotnet restore src/Web/Web.csproj --runtime win-x86
 
       - name: Publish
         run: dotnet publish src/Web/Web.csproj --configuration Release --runtime win-x86 --self-contained false --output ./publish --no-restore
 
-      - name: Deploy to MonsterASP.NET via WebDeploy
-        uses: rasmusbuchholdt/simply-web-deploy@2.1.0
+      - name: Deploy via SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
-          website-name: ${{ secrets.WEBSITE_NAME }}
-          server-computer-name: ${{ secrets.SERVER_COMPUTER_NAME }}
-          server-username: ${{ secrets.SERVER_USERNAME }}
-          server-password: ${{ secrets.SERVER_PASSWORD }}
+          server: ${{ secrets.FTP_HOST }}
+          port: 22
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local_path: ./publish/*
+          remote_path: /wwwroot
+          sftp_only: true
