@@ -388,7 +388,7 @@ public class BrevoEmailService : IEmailService
             var senderEmail = GetConfigValue("BREVO_SENDER_EMAIL") ?? "noreply@sapfiai.com";
             var senderName = GetConfigValue("BREVO_SENDER_NAME") ?? "SAPFIAI";
             var baseUrl = GetConfigValue("APP__BASEURL") ?? GetConfigValue("App:BaseUrl") ?? "https://localhost:5001";
-            var resetUrl = $"{baseUrl}/reset-password?token={Uri.EscapeDataString(resetToken)}&email={Uri.EscapeDataString(email)}";
+            var resetUrl = $"{baseUrl}/reset-password?userId={Uri.EscapeDataString(resetToken)}&email={Uri.EscapeDataString(email)}";
             var htmlContent = GeneratePasswordResetTemplate(userName, resetUrl);
 
             var payload = new

@@ -22,23 +22,32 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
 
     public async Task<Result> Handle(ForgotPasswordCommand request, CancellationToken cancellationToken)
     {
-        // Generar token de reset
-        var (success, resetToken) = await _identityService.GeneratePasswordResetTokenAsync(request.Email);
-
-        if (!success || string.IsNullOrEmpty(resetToken))
+        // Modo 2: userId + newPassword → cambiar contraseña
+        if (!string.IsNullOrEmpty(request.UserId))
         {
-            // Por seguridad, no revelamos si el email existe o no
-            return Result.Success();
+            var result = await _identityService.ResetPasswordByUserIdAsync(request.UserId, request.NewPassword!);
+
+            await _auditLogService.LogActionAsync(
+                userId: request.UserId,
+                action: result.IsSuccess ? "PASSWORD_RESET_SUCCESS" : "PASSWORD_RESET_FAILED",
+                ipAddress: request.IpAddress ?? "UNKNOWN",
+                userAgent: request.UserAgent,
+                details: result.IsSuccess ? "Contraseña restablecida exitosamente" : result.Error.Description,
+                status: result.IsSuccess ? "SUCCESS" : "FAILED");
+
+            return result;
         }
 
-        // Enviar email con el token
-        var emailSent = await _emailService.SendPasswordResetAsync(
-            request.Email,
-            request.Email,
-            resetToken);
+        // Modo 1: solo email → obtener userId y enviar correo
+        var (found, userId) = await _identityService.GetUserIdByEmailAsync(request.Email!);
+
+        if (!found || string.IsNullOrEmpty(userId))
+            return Result.Success(); // No revelar si el email existe
+
+        var emailSent = await _emailService.SendPasswordResetAsync(request.Email!, request.Email!, userId);
 
         await _auditLogService.LogActionAsync(
-            userId: request.Email,
+            userId: userId,
             action: "PASSWORD_RESET_REQUESTED",
             ipAddress: request.IpAddress ?? "UNKNOWN",
             userAgent: request.UserAgent,
