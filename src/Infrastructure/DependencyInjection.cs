@@ -67,7 +67,9 @@ public static class DependencyInjection
         services.AddTransient<IIdentityService, IdentityService>();
         services.AddMemoryCache();
 
-        services.AddHttpClient<IEmailService, BrevoEmailService>();
+        services.AddHttpClient<BrevoEmailService>();
+        services.AddScoped<IEmailService, MqttEmailService>();
+        services.AddHostedService<SAPFIAI.Infrastructure.BackgroundJobs.MqttEmailSubscriberService>();
         services.AddScoped<ITwoFactorService, TwoFactorService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IAuthenticationOperations, AuthenticationOperations>();
