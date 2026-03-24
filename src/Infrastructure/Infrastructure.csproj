@@ -13,6 +13,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" />
     <PackageReference Include="Permit" />
+    <PackageReference Include="MQTTnet" />
   </ItemGroup>
 
   <ItemGroup>
