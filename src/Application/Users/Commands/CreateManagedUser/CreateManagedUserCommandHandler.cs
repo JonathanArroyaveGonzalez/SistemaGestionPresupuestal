@@ -1,5 +1,6 @@
 using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
+using Microsoft.Extensions.Logging;
 
 namespace SAPFIAI.Application.Users.Commands.CreateManagedUser;
 
@@ -10,19 +11,22 @@ public class CreateManagedUserCommandHandler : IRequestHandler<CreateManagedUser
     private readonly IEmailService _emailService;
     private readonly IAuditLogService _auditLogService;
     private readonly IUser _currentUser;
+    private readonly ILogger<CreateManagedUserCommandHandler> _logger;
 
     public CreateManagedUserCommandHandler(
         IIdentityService identityService,
         IPermitProvisioningService permitProvisioningService,
         IEmailService emailService,
         IAuditLogService auditLogService,
-        IUser currentUser)
+        IUser currentUser,
+        ILogger<CreateManagedUserCommandHandler> logger)
     {
         _identityService = identityService;
         _permitProvisioningService = permitProvisioningService;
         _emailService = emailService;
         _auditLogService = auditLogService;
         _currentUser = currentUser;
+        _logger = logger;
     }
 
     public async Task<CreateManagedUserResponse> Handle(CreateManagedUserCommand request, CancellationToken cancellationToken)
@@ -109,8 +113,9 @@ public class CreateManagedUserCommandHandler : IRequestHandler<CreateManagedUser
                 request.Email,
                 request.UserName ?? request.Email);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to send registration confirmation email to {Email}", request.Email);
         }
 
         return new CreateManagedUserResponse

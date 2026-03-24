@@ -1,10 +1,5 @@
-﻿using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
-using MediatR;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Linq;
 
 namespace SAPFIAI.Application.Users.Commands.RevokeToken;
 
@@ -23,16 +18,14 @@ public class RevokeTokenCommandHandler : IRequestHandler<RevokeTokenCommand, Res
 
     public async Task<Result> Handle(RevokeTokenCommand request, CancellationToken cancellationToken)
     {
-        var refreshToken = _context.RefreshTokens.SingleOrDefault(x => x.Token == request.RefreshToken);
+        var refreshToken = await _context.RefreshTokens
+            .FirstOrDefaultAsync(x => x.Token == request.RefreshToken, cancellationToken);
 
         if (refreshToken == null || !refreshToken.IsActive)
-        {
             return Result.Failure(Error.NotFound("Token.Invalid", "Token inválido o ya revocado"));
-        }
 
-        // Revocar el token
         refreshToken.Revoke(request.IpAddress ?? "UNKNOWN", "Revocado por el usuario");
-        
+
         _context.RefreshTokens.Update(refreshToken);
         await _context.SaveChangesAsync(cancellationToken);
 

@@ -1,9 +1,5 @@
-﻿using SAPFIAI.Application.Common.Interfaces;
+using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
-using MediatR;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace SAPFIAI.Application.Users.Commands.EnableTwoFactor;
 
@@ -26,49 +22,49 @@ public class EnableTwoFactorCommandHandler : IRequestHandler<EnableTwoFactorComm
     public async Task<Result> Handle(EnableTwoFactorCommand request, CancellationToken cancellationToken)
     {
         var userId = _currentUser.Id;
-        
+
         if (string.IsNullOrEmpty(userId))
-        {
             return Result.Failure(Error.Failure("User.Unauthorized", "Usuario no autenticado"));
-        }
+
+        var ipAddress = request.IpAddress ?? "UNKNOWN";
+        var userAgent = request.UserAgent;
 
         try
         {
-            // Verificar contraseña
             var isPasswordValid = await _identityService.CheckPasswordAsync(userId, request.Password);
             if (!isPasswordValid)
             {
                 await _auditLogService.LogActionAsync(
                     userId: userId,
                     action: "ENABLE_2FA",
-                    ipAddress: "UNKNOWN",
-                    userAgent: "UNKNOWN",
+                    ipAddress: ipAddress,
+                    userAgent: userAgent,
                     details: "Contraseña incorrecta",
                     status: "ERROR");
-                    
+
                 return Result.Failure(Error.Failure("User.InvalidPassword", "Contraseña incorrecta"));
             }
 
             var result = await _identityService.SetTwoFactorEnabledAsync(userId, request.Enable);
-            
-            if (!result.Succeeded)
+
+            if (!result.IsSuccess)
             {
                 await _auditLogService.LogActionAsync(
                     userId: userId,
                     action: "ENABLE_2FA",
-                    ipAddress: "UNKNOWN",
-                    userAgent: "UNKNOWN",
+                    ipAddress: ipAddress,
+                    userAgent: userAgent,
                     details: $"Error al {(request.Enable ? "habilitar" : "deshabilitar")} 2FA",
                     status: "ERROR");
-                    
+
                 return result;
             }
 
             await _auditLogService.LogActionAsync(
                 userId: userId,
                 action: "ENABLE_2FA",
-                ipAddress: "UNKNOWN",
-                userAgent: "UNKNOWN",
+                ipAddress: ipAddress,
+                userAgent: userAgent,
                 details: $"2FA {(request.Enable ? "habilitado" : "deshabilitado")} exitosamente",
                 status: "SUCCESS");
 
@@ -79,8 +75,8 @@ public class EnableTwoFactorCommandHandler : IRequestHandler<EnableTwoFactorComm
             await _auditLogService.LogActionAsync(
                 userId: userId,
                 action: "ENABLE_2FA",
-                ipAddress: "UNKNOWN",
-                userAgent: "UNKNOWN",
+                ipAddress: ipAddress,
+                userAgent: userAgent,
                 details: ex.Message,
                 status: "ERROR");
 
