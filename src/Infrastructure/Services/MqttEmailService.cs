@@ -14,8 +14,6 @@ public class MqttEmailService : IEmailService
     private readonly IConfiguration _configuration;
     private readonly ILogger<MqttEmailService> _logger;
 
-    private const string Broker = "broker.hivemq.com";
-    private const int Port = 1883;
     private const string TopicPrefix = "sapfiai/email/";
 
     public MqttEmailService(BrevoEmailService brevo, IConfiguration configuration, ILogger<MqttEmailService> logger)
@@ -24,6 +22,19 @@ public class MqttEmailService : IEmailService
         _configuration = configuration;
         _logger = logger;
     }
+
+    private MqttClientOptions BuildOptions() =>
+        new MqttClientOptionsBuilder()
+            .WithTcpServer(
+                _configuration["CLUSTER_URL"] ?? Environment.GetEnvironmentVariable("CLUSTER_URL")!,
+                int.Parse(_configuration["PORT"] ?? Environment.GetEnvironmentVariable("PORT") ?? "8883"))
+            .WithCredentials(
+                _configuration["USERNAME"] ?? Environment.GetEnvironmentVariable("USERNAME")!,
+                _configuration["PASSWORD"] ?? Environment.GetEnvironmentVariable("PASSWORD")!)
+            .WithTlsOptions(o => o.UseTls())
+            .WithClientId($"sapfiai-pub-{Guid.NewGuid():N}")
+            .WithCleanSession()
+            .Build();
 
     public Task<bool> SendTwoFactorCodeAsync(string email, string code, string userName) =>
         PublishOrFallback("2fa", new { email, code, userName },
@@ -52,13 +63,7 @@ public class MqttEmailService : IEmailService
             var factory = new MqttFactory();
             using var client = factory.CreateMqttClient();
 
-            var options = new MqttClientOptionsBuilder()
-                .WithTcpServer(Broker, Port)
-                .WithClientId($"sapfiai-{Guid.NewGuid():N}")
-                .WithCleanSession()
-                .Build();
-
-            await client.ConnectAsync(options);
+            await client.ConnectAsync(BuildOptions());
 
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic($"{TopicPrefix}{topic}")

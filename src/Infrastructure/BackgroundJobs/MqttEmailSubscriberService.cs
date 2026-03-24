@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using MQTTnet;
 using MQTTnet.Client;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -11,18 +12,31 @@ namespace SAPFIAI.Infrastructure.BackgroundJobs;
 public class MqttEmailSubscriberService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<MqttEmailSubscriberService> _logger;
     private IMqttClient? _client;
 
-    private const string Broker = "broker.hivemq.com";
-    private const int Port = 1883;
     private const string TopicFilter = "sapfiai/email/#";
 
-    public MqttEmailSubscriberService(IServiceScopeFactory scopeFactory, ILogger<MqttEmailSubscriberService> logger)
+    public MqttEmailSubscriberService(IServiceScopeFactory scopeFactory, IConfiguration configuration, ILogger<MqttEmailSubscriberService> logger)
     {
         _scopeFactory = scopeFactory;
+        _configuration = configuration;
         _logger = logger;
     }
+
+    private MqttClientOptions BuildOptions() =>
+        new MqttClientOptionsBuilder()
+            .WithTcpServer(
+                _configuration["CLUSTER_URL"] ?? Environment.GetEnvironmentVariable("CLUSTER_URL")!,
+                int.Parse(_configuration["PORT"] ?? Environment.GetEnvironmentVariable("PORT") ?? "8883"))
+            .WithCredentials(
+                _configuration["USERNAME"] ?? Environment.GetEnvironmentVariable("USERNAME")!,
+                _configuration["PASSWORD"] ?? Environment.GetEnvironmentVariable("PASSWORD")!)
+            .WithTlsOptions(o => o.UseTls())
+            .WithClientId($"sapfiai-subscriber-{Guid.NewGuid():N}")
+            .WithCleanSession(false)
+            .Build();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -31,11 +45,7 @@ public class MqttEmailSubscriberService : BackgroundService
 
         _client.ApplicationMessageReceivedAsync += OnMessageReceived;
 
-        var options = new MqttClientOptionsBuilder()
-            .WithTcpServer(Broker, Port)
-            .WithClientId($"sapfiai-subscriber-{Guid.NewGuid():N}")
-            .WithCleanSession(false)
-            .Build();
+        var options = BuildOptions();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -45,7 +55,7 @@ public class MqttEmailSubscriberService : BackgroundService
                 {
                     await _client.ConnectAsync(options, stoppingToken);
                     await _client.SubscribeAsync(TopicFilter, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, stoppingToken);
-                    _logger.LogInformation("MQTT subscriber conectado a {Broker}", Broker);
+                    _logger.LogInformation("MQTT subscriber conectado a {Broker}", _configuration["CLUSTER_URL"]);
                 }
                 await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
             }
