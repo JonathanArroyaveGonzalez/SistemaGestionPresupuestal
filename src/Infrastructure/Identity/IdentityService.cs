@@ -45,6 +45,12 @@ public class IdentityService : IIdentityService
         return result.ToApplicationResult();
     }
 
+    public async Task<(bool Success, string? UserId)> GetUserIdByEmailAsync(string email)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+        return user == null ? (false, null) : (true, user.Id);
+    }
+
     public async Task<(bool Success, string? Token)> GeneratePasswordResetTokenAsync(string email)
     {
         var user = await _userManager.FindByEmailAsync(email);
@@ -61,6 +67,17 @@ public class IdentityService : IIdentityService
         if (user == null)
             return Result.Failure(new Error("UserNotFound", "Usuario no encontrado"));
 
+        var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+        return result.ToApplicationResult();
+    }
+
+    public async Task<Result> ResetPasswordByUserIdAsync(string userId, string newPassword)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return Result.Failure(new Error("UserNotFound", "Usuario no encontrado"));
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
         return result.ToApplicationResult();
     }
