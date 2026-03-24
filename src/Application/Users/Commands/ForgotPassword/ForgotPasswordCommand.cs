@@ -6,11 +6,15 @@ namespace SAPFIAI.Application.Users.Commands.ForgotPassword;
 
 public record ForgotPasswordCommand : IRequest<Result>
 {
+    // ── Paso 1: solicitud por email ──────────────────────────────────────────
     public string? Email { get; init; }
 
+    // ── Paso 2: reset con userId + nueva contraseña ──────────────────────────
     public string? UserId { get; init; }
 
     public string? NewPassword { get; init; }
+
+    public string? ConfirmPassword { get; init; }
 
     [JsonIgnore]
     public string? IpAddress { get; init; }
@@ -23,6 +27,7 @@ public class ForgotPasswordCommandValidator : AbstractValidator<ForgotPasswordCo
 {
     public ForgotPasswordCommandValidator()
     {
+        // Paso 1: solo email
         When(x => string.IsNullOrEmpty(x.UserId), () =>
         {
             RuleFor(x => x.Email)
@@ -30,6 +35,7 @@ public class ForgotPasswordCommandValidator : AbstractValidator<ForgotPasswordCo
                 .EmailAddress().WithMessage("El email no es válido");
         });
 
+        // Paso 2: userId + nueva contraseña
         When(x => !string.IsNullOrEmpty(x.UserId), () =>
         {
             RuleFor(x => x.NewPassword)
@@ -39,6 +45,10 @@ public class ForgotPasswordCommandValidator : AbstractValidator<ForgotPasswordCo
                 .Matches("[a-z]").WithMessage("Debe contener al menos una letra minúscula")
                 .Matches("[0-9]").WithMessage("Debe contener al menos un número")
                 .Matches("[^a-zA-Z0-9]").WithMessage("Debe contener al menos un carácter especial");
+
+            RuleFor(x => x.ConfirmPassword)
+                .NotEmpty().WithMessage("Debe confirmar la contraseña")
+                .Equal(x => x.NewPassword).WithMessage("Las contraseñas no coinciden");
         });
     }
 }

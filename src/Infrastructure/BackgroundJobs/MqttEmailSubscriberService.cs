@@ -34,8 +34,11 @@ public class MqttEmailSubscriberService : BackgroundService
                 _configuration["USERNAME_HIVE"] ?? Environment.GetEnvironmentVariable("USERNAME_HIVE")!,
                 _configuration["PASSWORD_HIVE"] ?? Environment.GetEnvironmentVariable("PASSWORD_HIVE")!)
             .WithTlsOptions(o => o.UseTls())
-            .WithClientId($"sapfiai-subscriber-{Guid.NewGuid():N}")
-            .WithCleanSession(false)
+            // ClientId fijo para que HiveMQ identifique la sesión entre reinicios.
+            // CleanSession(true): descarta mensajes encolados durante desconexiones —
+            // evita reenvíos masivos de emails al reconectar.
+            .WithClientId($"sapfiai-subscriber-{Environment.MachineName}")
+            .WithCleanSession()
             .Build();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

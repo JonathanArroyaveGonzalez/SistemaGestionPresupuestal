@@ -8,11 +8,13 @@ using Microsoft.Extensions.Logging;
 
 namespace SAPFIAI.Infrastructure.Services;
 
-public class MqttEmailService : IEmailService
+public class MqttEmailService : IEmailService, IAsyncDisposable
 {
     private readonly BrevoEmailService _brevo;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MqttEmailService> _logger;
+    private readonly IMqttClient _client;
+    private readonly SemaphoreSlim _connectLock = new(1, 1);
 
     private const string TopicPrefix = "sapfiai/email/";
 
@@ -21,6 +23,7 @@ public class MqttEmailService : IEmailService
         _brevo = brevo;
         _configuration = configuration;
         _logger = logger;
+        _client = new MqttFactory().CreateMqttClient();
     }
 
     private MqttClientOptions BuildOptions() =>
@@ -32,7 +35,7 @@ public class MqttEmailService : IEmailService
                 _configuration["USERNAME_HIVE"] ?? Environment.GetEnvironmentVariable("USERNAME_HIVE")!,
                 _configuration["PASSWORD_HIVE"] ?? Environment.GetEnvironmentVariable("PASSWORD_HIVE")!)
             .WithTlsOptions(o => o.UseTls())
-            .WithClientId($"sapfiai-pub-{Guid.NewGuid():N}")
+            .WithClientId($"sapfiai-pub-{Environment.MachineName}")
             .WithCleanSession()
             .Build();
 
@@ -60,21 +63,21 @@ public class MqttEmailService : IEmailService
     {
         try
         {
-            var factory = new MqttFactory();
-            using var client = factory.CreateMqttClient();
-
-            await client.ConnectAsync(BuildOptions());
+            await EnsureConnectedAsync();
 
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic($"{TopicPrefix}{topic}")
                 .WithPayload(JsonSerializer.Serialize(payload))
-                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
-                .WithRetainFlag()
+                // AtMostOnce (QoS 0): fire-and-forget, sin reentregas automáticas.
+                // El subscriber usa AtLeastOnce para garantizar procesamiento,
+                // pero el publisher no necesita confirmación — el fallback cubre fallos.
+                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtMostOnce)
+                // Sin RetainFlag: el broker NO almacena el mensaje.
+                // Con RetainFlag=true el broker reenviaría el mensaje a cada nuevo
+                // subscriber/reconexión, causando correos duplicados.
                 .Build();
 
-            await client.PublishAsync(message);
-            await client.DisconnectAsync();
-
+            await _client.PublishAsync(message);
             _logger.LogInformation("MQTT publicado en {Topic}", topic);
             return true;
         }
@@ -83,5 +86,29 @@ public class MqttEmailService : IEmailService
             _logger.LogWarning(ex, "MQTT no disponible para {Topic}, usando fallback directo", topic);
             return await fallback();
         }
+    }
+
+    private async Task EnsureConnectedAsync()
+    {
+        if (_client.IsConnected) return;
+
+        await _connectLock.WaitAsync();
+        try
+        {
+            if (!_client.IsConnected)
+                await _client.ConnectAsync(BuildOptions());
+        }
+        finally
+        {
+            _connectLock.Release();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_client.IsConnected)
+            await _client.DisconnectAsync();
+        _client.Dispose();
+        _connectLock.Dispose();
     }
 }
