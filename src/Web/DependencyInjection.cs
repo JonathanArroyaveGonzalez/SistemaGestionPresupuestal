@@ -2,6 +2,8 @@ using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Infrastructure.Data;
 using SAPFIAI.Web.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -69,6 +71,29 @@ public static class DependencyInjection
                 return Task.CompletedTask;
             });
         });
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.AddFixedWindowLimiter("auth", opt =>
+            {
+                opt.Window = TimeSpan.FromMinutes(1);
+                opt.PermitLimit = 10;
+                opt.QueueLimit = 0;
+                opt.AutoReplenishment = true;
+                opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            });
+
+            options.AddFixedWindowLimiter("forgot-password", opt =>
+            {
+                opt.Window = TimeSpan.FromMinutes(15);
+                opt.PermitLimit = 5;
+                opt.QueueLimit = 0;
+                opt.AutoReplenishment = true;
+                opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            });
+        });
+
         services.AddEndpointsApiExplorer();
 
         services.AddCors(options =>

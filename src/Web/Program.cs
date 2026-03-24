@@ -98,6 +98,7 @@ try
     // Bootstrap Permit.io — se ejecuta dentro de SeedAsync junto con la sincronizacion del admin.
     // No se llama aqui para evitar doble ejecucion.
 
+    app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();
 
