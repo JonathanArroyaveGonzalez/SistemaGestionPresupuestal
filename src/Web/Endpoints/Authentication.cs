@@ -9,6 +9,7 @@ using SAPFIAI.Application.Users.Commands.ResetPassword;
 using SAPFIAI.Application.Users.Commands.RevokeToken;
 using SAPFIAI.Application.Users.Commands.ValidateTwoFactor;
 using SAPFIAI.Application.Users.Queries;
+using SAPFIAI.Domain.Constants;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using SAPFIAI.Web.Infrastructure;
@@ -25,41 +26,91 @@ public class Authentication : EndpointGroupBase
         group.MapPost("/login", Login)
             .WithName("Login")
             .WithSummary("Iniciar sesión")
-            .WithDescription("Autentica al usuario y retorna JWT + refresh token. Si tiene 2FA activo, retorna `requires2FA: true` y no incluye token.")
+            .WithDescription("""
+                Autentica al usuario con email y contraseña.
+
+                **Flujo sin 2FA:** retorna `token` (JWT) + `refreshToken` listos para usar.
+                Cualquier sesión activa anterior queda revocada automáticamente.
+
+                **Flujo con 2FA:** retorna `requires2FA: true` y un `token` temporal sin privilegios.
+                Ese token debe enviarse a `POST /verify-2fa` junto con el código OTP recibido por email.
+
+                **Rate limit:** 10 peticiones por minuto por IP. Excederlo retorna `429`.
+                """)
             .Produces<LoginResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
+            .Produces<LoginResponse>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("auth")
             .AllowAnonymous();
 
         group.MapPost("/verify-2fa", VerifyTwoFactor)
             .WithName("Verify2FA")
             .WithSummary("Verificar código 2FA")
-            .WithDescription("Valida el código OTP de 6 dígitos enviado por email. Requiere el token temporal retornado por `/login`.")
+            .WithDescription("""
+                Valida el código OTP de 6 dígitos enviado por email y completa el login.
+
+                Requiere el `token` temporal retornado por `POST /login` cuando `requires2FA: true`.
+                Al verificar correctamente, las sesiones anteriores del usuario quedan revocadas
+                y se retorna un nuevo `token` (JWT) + `refreshToken` definitivos.
+
+                **Rate limit:** 10 peticiones por minuto por IP. Excederlo retorna `429`.
+                """)
             .Produces<ValidateTwoFactorResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
+            .Produces<ValidateTwoFactorResponse>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("auth")
             .AllowAnonymous();
 
         group.MapPost("/forgot-password", ForgotPassword)
             .WithName("ForgotPassword")
-            .WithSummary("Solicitar restablecimiento de contraseña")
-            .WithDescription("Envía un email con el token para restablecer la contraseña.")
+            .WithSummary("Olvidé mi contraseña / Restablecer contraseña")
+            .WithDescription("""
+                Endpoint de dos modos para el flujo de recuperación de contraseña (usuario NO autenticado).
+
+                **Modo 1 — Solicitar enlace** `{ "email": "..." }`
+                Busca el usuario por email, y si existe envía un correo con un enlace que contiene
+                el `userId` como parámetro. Por seguridad, siempre retorna `200` aunque el email no exista.
+
+                **Modo 2 — Establecer nueva contraseña** `{ "userId": "...", "newPassword": "..." }`
+                Cambia la contraseña del usuario identificado por `userId` (obtenido del enlace del correo).
+                No envía ningún correo.
+
+                **Rate limit:** 5 peticiones cada 15 minutos por IP. Excederlo retorna `429`.
+                """)
             .Produces<Result>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status429TooManyRequests)
+            .RequireRateLimiting("forgot-password")
             .AllowAnonymous();
 
         group.MapPost("/reset-password", ResetPassword)
             .WithName("ResetPassword")
-            .WithSummary("Restablecer contraseña")
-            .WithDescription("Establece una nueva contraseña usando el token recibido por email.")
+            .WithSummary("Cambiar contraseña (usuario autenticado)")
+            .WithDescription("""
+                Cambia la contraseña del usuario actualmente autenticado. Requiere JWT válido.
+
+                A diferencia de `POST /forgot-password`, este endpoint es para usuarios que
+                **recuerdan su contraseña actual** y desean cambiarla voluntariamente.
+
+                Body requerido:
+                - `oldPassword`: contraseña actual (se valida contra la BD).
+                - `newPassword`: nueva contraseña (mín. 8 caracteres, mayúscula, minúscula, número y carácter especial).
+                - `confirmPassword`: debe coincidir exactamente con `newPassword`.
+
+                El `userId` se extrae automáticamente del JWT — no debe enviarse en el body.
+                """)
             .Produces<Result>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
-            .AllowAnonymous();
+            .Produces(StatusCodes.Status401Unauthorized)
+            .RequireAuthorization();
 
         group.MapPost("/refresh-token", RefreshToken)
             .WithName("RefreshToken")
             .WithSummary("Renovar token JWT")
             .WithDescription("Genera un nuevo JWT usando un refresh token válido y no revocado.")
             .Produces<LoginResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
+            .Produces<LoginResponse>(StatusCodes.Status400BadRequest)
             .AllowAnonymous();
 
         group.MapPost("/logout", Logout)
@@ -90,20 +141,24 @@ public class Authentication : EndpointGroupBase
             .WithName("GetAuditLogs")
             .WithSummary("Obtener logs de auditoría")
             .WithDescription("Retorna logs paginados de todas las acciones del sistema. Soporta filtros por acción, fecha y paginación.")
-            .Produces<IEnumerable<AuditLogDto>>(StatusCodes.Status200OK)
+            .Produces<PagedResult<AuditLogDto>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
-            .RequireAuthorization();
+            .Produces(StatusCodes.Status403Forbidden)
+            .RequireAuthorization()
+            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.Read);
 
         group.MapGet("/audit-logs/user/{userId}", GetUserAuditLogs)
             .WithName("GetUserAuditLogs")
             .WithSummary("Obtener logs de auditoría por usuario")
             .WithDescription("Retorna logs paginados de las acciones de un usuario específico identificado por su `userId`.")
-            .Produces<IEnumerable<AuditLogDto>>(StatusCodes.Status200OK)
+            .Produces<PagedResult<AuditLogDto>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
-            .RequireAuthorization();
+            .Produces(StatusCodes.Status403Forbidden)
+            .RequireAuthorization()
+            .RequirePermit(PermitConstants.Resources.ManageUsers, PermitConstants.Actions.Read);
     }
 
-    private static async Task<LoginResponse> Login(
+    private static async Task<IResult> Login(
         [FromBody] LoginCommand command,
         IMediator mediator,
         HttpContext httpContext)
@@ -114,10 +169,11 @@ public class Authentication : EndpointGroupBase
             UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
 
-        return await mediator.Send(command);
+        var response = await mediator.Send(command);
+        return response.Success ? Results.Ok(response) : Results.BadRequest(response);
     }
 
-    private static async Task<ValidateTwoFactorResponse> VerifyTwoFactor(
+    private static async Task<IResult> VerifyTwoFactor(
         [FromBody] ValidateTwoFactorCommand command,
         IMediator mediator,
         HttpContext httpContext)
@@ -128,10 +184,11 @@ public class Authentication : EndpointGroupBase
             UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
 
-        return await mediator.Send(command);
+        var response = await mediator.Send(command);
+        return response.Success ? Results.Ok(response) : Results.BadRequest(response);
     }
 
-    private static async Task<Result> ForgotPassword(
+    private static async Task<IResult> ForgotPassword(
         [FromBody] ForgotPasswordCommand command,
         IMediator mediator,
         HttpContext httpContext)
@@ -142,24 +199,27 @@ public class Authentication : EndpointGroupBase
             UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
 
-        return await mediator.Send(command);
+        var result = await mediator.Send(command);
+        return result.IsSuccess ? Results.Ok(result) : result.ToHttpResult();
     }
 
-    private static async Task<Result> ResetPassword(
+    private static async Task<IResult> ResetPassword(
         [FromBody] ResetPasswordCommand command,
         IMediator mediator,
+        IUser user,
         HttpContext httpContext)
     {
         command = command with
         {
+            UserId = user.Id ?? string.Empty,
             IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
             UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
 
-        return await mediator.Send(command);
+        return (await mediator.Send(command)).ToHttpResult();
     }
 
-    private static async Task<LoginResponse> RefreshToken(
+    private static async Task<IResult> RefreshToken(
         [FromBody] RefreshTokenCommand command,
         IMediator mediator,
         HttpContext httpContext)
@@ -170,10 +230,11 @@ public class Authentication : EndpointGroupBase
             UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
 
-        return await mediator.Send(command);
+        var response = await mediator.Send(command);
+        return response.Success ? Results.Ok(response) : Results.BadRequest(response);
     }
 
-    private static async Task<Result> Logout(
+    private static async Task<IResult> Logout(
         IMediator mediator,
         IUser user,
         HttpContext httpContext)
@@ -185,10 +246,10 @@ public class Authentication : EndpointGroupBase
             UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
 
-        return await mediator.Send(command);
+        return (await mediator.Send(command)).ToHttpResult();
     }
 
-    private static async Task<Result> RevokeToken(
+    private static async Task<IResult> RevokeToken(
         [FromBody] RevokeTokenCommand command,
         IMediator mediator,
         HttpContext httpContext)
@@ -199,28 +260,34 @@ public class Authentication : EndpointGroupBase
             UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
 
-        return await mediator.Send(command);
+        return (await mediator.Send(command)).ToHttpResult();
     }
 
-    private static async Task<Result> EnableTwoFactor(
+    private static async Task<IResult> EnableTwoFactor(
         [FromBody] EnableTwoFactorCommand command,
         IMediator mediator,
-        IUser user)
+        IUser user,
+        HttpContext httpContext)
     {
         command = command with
         {
-            UserId = user.Id ?? string.Empty
+            UserId = user.Id ?? string.Empty,
+            IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = httpContext.Request.Headers.UserAgent.ToString()
         };
 
-        return await mediator.Send(command);
+        return (await mediator.Send(command)).ToHttpResult();
     }
 
-    private static async Task<IEnumerable<AuditLogDto>> GetAuditLogs(
+    private static async Task<IResult> GetAuditLogs(
         IMediator mediator,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? action = null)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = new GetAuditLogsQuery
         {
             PageNumber = pageNumber,
@@ -228,15 +295,18 @@ public class Authentication : EndpointGroupBase
             Action = action
         };
 
-        return await mediator.Send(query);
+        return Results.Ok(await mediator.Send(query));
     }
 
-    private static async Task<IEnumerable<AuditLogDto>> GetUserAuditLogs(
+    private static async Task<IResult> GetUserAuditLogs(
         IMediator mediator,
         [FromRoute] string userId,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 20)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = new GetAuditLogsQuery
         {
             UserId = userId,
@@ -244,6 +314,6 @@ public class Authentication : EndpointGroupBase
             PageSize = pageSize
         };
 
-        return await mediator.Send(query);
+        return Results.Ok(await mediator.Send(query));
     }
 }
