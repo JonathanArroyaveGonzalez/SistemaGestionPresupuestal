@@ -29,8 +29,8 @@ public class MqttEmailService : IEmailService
                 _configuration["CLUSTER_URL"] ?? Environment.GetEnvironmentVariable("CLUSTER_URL")!,
                 int.Parse(_configuration["PORT"] ?? Environment.GetEnvironmentVariable("PORT") ?? "8883"))
             .WithCredentials(
-                _configuration["USERNAME"] ?? Environment.GetEnvironmentVariable("USERNAME")!,
-                _configuration["PASSWORD"] ?? Environment.GetEnvironmentVariable("PASSWORD")!)
+                _configuration["USERNAME_HIVE"] ?? Environment.GetEnvironmentVariable("USERNAME_HIVE")!,
+                _configuration["PASSWORD_HIVE"] ?? Environment.GetEnvironmentVariable("PASSWORD_HIVE")!)
             .WithTlsOptions(o => o.UseTls())
             .WithClientId($"sapfiai-pub-{Guid.NewGuid():N}")
             .WithCleanSession()
