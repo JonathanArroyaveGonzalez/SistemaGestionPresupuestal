@@ -1,10 +1,9 @@
 using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
-using SAPFIAI.Domain.Entities;
 
 namespace SAPFIAI.Application.Users.Queries;
 
-public record GetAuditLogsQuery : IRequest<IEnumerable<AuditLogDto>>
+public record GetAuditLogsQuery : IRequest<PagedResult<AuditLogDto>>
 {
     public string? UserId { get; init; }
 
@@ -19,7 +18,7 @@ public record GetAuditLogsQuery : IRequest<IEnumerable<AuditLogDto>>
     public int PageSize { get; init; } = 20;
 }
 
-public class GetAuditLogsQueryHandler : IRequestHandler<GetAuditLogsQuery, IEnumerable<AuditLogDto>>
+public class GetAuditLogsQueryHandler : IRequestHandler<GetAuditLogsQuery, PagedResult<AuditLogDto>>
 {
     private readonly IApplicationDbContext _context;
 
@@ -28,11 +27,10 @@ public class GetAuditLogsQueryHandler : IRequestHandler<GetAuditLogsQuery, IEnum
         _context = context;
     }
 
-    public async Task<IEnumerable<AuditLogDto>> Handle(GetAuditLogsQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<AuditLogDto>> Handle(GetAuditLogsQuery request, CancellationToken cancellationToken)
     {
         var query = _context.AuditLogs.AsQueryable();
 
-        // Filtros
         if (!string.IsNullOrEmpty(request.UserId))
             query = query.Where(x => x.UserId == request.UserId);
 
@@ -45,8 +43,9 @@ public class GetAuditLogsQueryHandler : IRequestHandler<GetAuditLogsQuery, IEnum
         if (request.ToDate.HasValue)
             query = query.Where(x => x.Timestamp <= request.ToDate);
 
-        // Paginación
-        var logs = await query
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
             .OrderByDescending(x => x.Timestamp)
             .Skip((request.PageNumber - 1) * request.PageSize)
             .Take(request.PageSize)
@@ -59,10 +58,19 @@ public class GetAuditLogsQueryHandler : IRequestHandler<GetAuditLogsQuery, IEnum
                 UserAgent = x.UserAgent,
                 Timestamp = x.Timestamp,
                 Details = x.Details,
-                Status = x.Status
+                Status = x.Status,
+                ErrorMessage = x.ErrorMessage,
+                ResourceId = x.ResourceId,
+                ResourceType = x.ResourceType
             })
             .ToListAsync(cancellationToken);
 
-        return logs;
+        return new PagedResult<AuditLogDto>
+        {
+            Items = items,
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            TotalCount = totalCount
+        };
     }
 }
