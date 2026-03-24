@@ -126,7 +126,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             };
         }
 
-        // 5. Flujo sin 2FA: login directo
+        // 5. Flujo sin 2FA: login directo — revocar sesiones anteriores
+        await _refreshTokenService.RevokeAllUserTokensAsync(userId, ipAddress, "New login");
         var token = _jwtTokenGenerator.GenerateToken(userId, email, requiresTwoFactorVerification: false);
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId, ipAddress);
 

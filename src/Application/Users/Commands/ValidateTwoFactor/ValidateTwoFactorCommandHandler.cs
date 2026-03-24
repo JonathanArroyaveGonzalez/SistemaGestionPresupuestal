@@ -99,6 +99,9 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
 
         await _twoFactorService.ClearTwoFactorCodeAsync(userId);
 
+        // Revocar sesiones anteriores antes de emitir nuevos tokens
+        await _refreshTokenService.RevokeAllUserTokensAsync(userId, request.IpAddress ?? "UNKNOWN", "New login via 2FA");
+
         var newToken = _jwtTokenGenerator.GenerateToken(userId, user.Email ?? string.Empty, requiresTwoFactorVerification: false);
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId, request.IpAddress ?? "UNKNOWN");
 
