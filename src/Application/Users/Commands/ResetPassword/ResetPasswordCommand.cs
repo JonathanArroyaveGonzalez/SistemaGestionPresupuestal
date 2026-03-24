@@ -6,13 +6,14 @@ namespace SAPFIAI.Application.Users.Commands.ResetPassword;
 
 public record ResetPasswordCommand : IRequest<Result>
 {
-    public required string Email { get; init; }
-
-    public required string Token { get; init; }
+    public required string OldPassword { get; init; }
 
     public required string NewPassword { get; init; }
 
     public required string ConfirmPassword { get; init; }
+
+    [JsonIgnore]
+    public string? UserId { get; init; }
 
     [JsonIgnore]
     public string? IpAddress { get; init; }
@@ -25,23 +26,20 @@ public class ResetPasswordCommandValidator : AbstractValidator<ResetPasswordComm
 {
     public ResetPasswordCommandValidator()
     {
-        RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("El email es requerido")
-            .EmailAddress().WithMessage("El email no es v·lido");
-
-        RuleFor(x => x.Token)
-            .NotEmpty().WithMessage("El token es requerido");
+        RuleFor(x => x.OldPassword)
+            .NotEmpty().WithMessage("La contrase√±a actual es requerida");
 
         RuleFor(x => x.NewPassword)
-            .NotEmpty().WithMessage("La nueva contraseÒa es requerida")
-            .MinimumLength(8).WithMessage("La contraseÒa debe tener al menos 8 caracteres")
-            .Matches("[A-Z]").WithMessage("La contraseÒa debe contener al menos una letra may˙scula")
-            .Matches("[a-z]").WithMessage("La contraseÒa debe contener al menos una letra min˙scula")
-            .Matches("[0-9]").WithMessage("La contraseÒa debe contener al menos un n˙mero")
-            .Matches("[^a-zA-Z0-9]").WithMessage("La contraseÒa debe contener al menos un car·cter especial");
+            .NotEmpty().WithMessage("La nueva contrase√±a es requerida")
+            .MinimumLength(8).WithMessage("La contrase√±a debe tener al menos 8 caracteres")
+            .Matches("[A-Z]").WithMessage("Debe contener al menos una letra may√∫scula")
+            .Matches("[a-z]").WithMessage("Debe contener al menos una letra min√∫scula")
+            .Matches("[0-9]").WithMessage("Debe contener al menos un n√∫mero")
+            .Matches("[^a-zA-Z0-9]").WithMessage("Debe contener al menos un car√°cter especial")
+            .NotEqual(x => x.OldPassword).WithMessage("La nueva contrase√±a no puede ser igual a la anterior");
 
         RuleFor(x => x.ConfirmPassword)
-            .NotEmpty().WithMessage("Debe confirmar la contraseÒa")
-            .Equal(x => x.NewPassword).WithMessage("Las contraseÒas no coinciden");
+            .NotEmpty().WithMessage("Debe confirmar la contrase√±a")
+            .Equal(x => x.NewPassword).WithMessage("Las contrase√±as no coinciden");
     }
 }
