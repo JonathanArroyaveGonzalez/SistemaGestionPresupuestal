@@ -46,13 +46,17 @@ public class BudgetDocument
         Status = newStatus;
     }
 
-    public void AddVersion(DocumentVersion version)
+    public DocumentVersion AddVersion(int versionNumber, string versionUser, decimal totalAmount, decimal executedAmount, string? remarks = null)
     {
+        var version = new DocumentVersion(Id, versionNumber, versionUser, totalAmount, executedAmount, remarks);
         _versions.Add(version);
+        return version;
     }
 
-    public void AddTransfer(BudgetTransfer transfer)
+    public BudgetTransfer AddTransfer(BudgetTransferType transferType, decimal previousValue, decimal newValue, string transferUser)
     {
+        var transfer = new BudgetTransfer(Id, transferType, previousValue, newValue, transferUser);
         _transfers.Add(transfer);
+        return transfer;
     }
 }
