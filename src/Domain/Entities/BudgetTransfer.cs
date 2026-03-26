@@ -14,7 +14,7 @@ public class BudgetTransfer : BaseEntity
 
     public BudgetDocument? BudgetDocument { get; private set; }
 
-    private BudgetTransfer(BudgetDocumentId budgetDocumentId, BudgetTransferType transferType, decimal previousValue, decimal newValue, string transferUser)
+    internal BudgetTransfer(BudgetDocumentId budgetDocumentId, BudgetTransferType transferType, decimal previousValue, decimal newValue, string transferUser)
     {
         BudgetDocumentId = budgetDocumentId;
         TransferType = transferType;

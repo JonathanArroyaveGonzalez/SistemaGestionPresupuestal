@@ -17,7 +17,7 @@ public class DocumentVersion : BaseEntity
 
     public BudgetDocument? BudgetDocument { get; private set; }
 
-    private DocumentVersion(BudgetDocumentId budgetDocumentId, int versionNumber, string versionUser, decimal totalAmount, decimal executedAmount, string? remarks)
+    internal DocumentVersion(BudgetDocumentId budgetDocumentId, int versionNumber, string versionUser, decimal totalAmount, decimal executedAmount, string? remarks)
     {
         BudgetDocumentId = budgetDocumentId;
         VersionNumber = versionNumber;
